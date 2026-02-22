@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台南分帳神器 - 最終完美版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @media print { .no-print { display: none !important; } }
+        .active-tab { border-bottom: 4px solid #3b82f6; color: #3b82f6; background: #eff6ff; font-weight: bold; }
+        .tab { transition: all 0.3s; cursor: pointer; padding: 8px 20px; border-radius: 99px; }
+        #tripTitle:focus { border-bottom: 2px solid #3b82f6; outline: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCLz4iTnKXkba26S4fRUdV6d0DTZiRXSg0",
+            authDomain: "travel-expense-7dbaa.firebaseapp.com",
+            projectId: "travel-expense-7dbaa",
+            storageBucket: "travel-expense-7dbaa.firebasestorage.app",
+            messagingSenderId: "745263115640",
+            appId: "1:745263115640:web:5714e2c1d041969ecaec8d"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const tripsRef = doc(db, "travelData", "master_record");
+
+        window.trips = [];
+        window.currentTripId = localStorage.getItem('current_trip_id') || "";
+
+        onSnapshot(tripsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                window.trips = docSnap.data().trips || [];
+            } else {
+                window.trips = [{ id: Date.now(), name: '台南美食之旅', members: ['Ariel', 'Kevin'], data: [] }];
+                setDoc(tripsRef, { trips: window.trips });
+            }
+            if (!window.currentTripId && window.trips.length > 0) window.currentTripId = window.trips[0].id;
+            refreshAll();
+        });
+
+        async function sync() {
+            await setDoc(tripsRef, { trips: window.trips });
+        }
+
+        // 新增：更新旅程名稱功能
+        window.updateTripName = async () => {
+            const el = document.getElementById('tripTitle');
+            const newName = el.innerText.trim();
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip && newName && trip.name !== newName) {
+                trip.name = newName;
+                await sync();
+            }
+        };
+
+        window.addMember = async () => {
+            const name = document.getElementById('newMemberName').value.trim();
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (name && !trip.members.includes(name)) {
+                trip.members.push(name);
+                document.getElementById('newMemberName').value = '';
+                await sync();
+            }
+        };
+
+        window.addRow = async () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const name = document.getElementById('itemName').value;
+            const payer = document.getElementById('payer').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const selected = Array.from(document.querySelectorAll('#participantChecks input:checked')).map(i => i.value);
+            if (name && payer && !isNaN(amount) && selected.length > 0) {
+                trip.data.push({ id: Date.now(), name, payer, amount, participants: selected });
+                document.getElementById('itemName').value = '';
+                document.getElementById('amount').value = '';
+                await sync();
+            }
+        };
+
+        window.switchTrip = (id) => {
+            window.currentTripId = id;
+            localStorage.setItem('current_trip_id', id);
+            refreshAll();
+        };
+
+        window.createNewTrip = async () => {
+            const name = prompt('新旅程名稱：', '新之旅');
+            if (name) {
+                const newTrip = { id: Date.now(), name, members: [], data: [] };
+                window.trips.push(newTrip);
+                window.currentTripId = newTrip.id;
+                localStorage.setItem('current_trip_id', window.currentTripId);
+                await sync();
+            }
+        };
+
+        function refreshAll() {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)) || window.trips[0];
+            if (!trip) return;
+
+            document.getElementById('tripTitle').innerText = trip.name;
+            document.getElementById('tripTabs').innerHTML = window.trips.map(t => `
+                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400'}">
+                    ${t.name}
+                </div>
+            `).join('');
+
+            const mList = document.getElementById('memberList');
+            const mChecks = document.getElementById('participantChecks');
+            const mSelect = document.getElementById('payer');
+            mList.innerHTML = trip.members.map(m => `<span class="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-600">${m}</span>`).join('');
+            mChecks.innerHTML = trip.members.map(m => `<label class="flex items-center space-x-2 bg-gray-50 p-2 rounded-lg"><input type="checkbox" value="${m}" checked> <span class="text-sm">${m}</span></label>`).join('');
+            mSelect.innerHTML = '<option value="" disabled selected>誰付錢？</option>' + trip.members.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            let total = 0; let balances = {};
+            trip.members.forEach(m => balances[m] = 0);
+            const listBody = document.getElementById('expenseList');
+            listBody.innerHTML = trip.data.map(item => {
+                total += item.amount;
+                balances[item.payer] += item.amount;
+                const share = item.amount / item.participants.length;
+                item.participants.forEach(p => balances[p] -= share);
+                return `<tr class="border-b"><td class="p-4">${item.name}</td><td class="p-4">${item.payer}</td><td class="p-4 text-right font-bold">$${item.amount.toLocaleString()}</td></tr>`;
+            }).join('');
+
+            document.getElementById('totalSpent').innerText = `$${Math.round(total).toLocaleString()}`;
+            document.getElementById('balanceList').innerHTML = trip.members.map(m => {
+                const b = Math.round(balances[m]);
+                return `<div class="flex justify-between p-2 rounded-lg ${b>=0?'bg-green-50 text-green-700':'bg-red-50 text-red-700'}"><span>${m}</span><b>${b>=0?'+':''}${b}</b></div>`;
+            }).join('');
+        }
+    </script>
+
+    <nav class="bg-white border-b p-4 no-print sticky top-0 z-10 shadow-sm">
+        <div class="max-w-6xl mx-auto flex items-center">
+            <div id="tripTabs" class="flex space-x-2 overflow-x-auto flex-1 p-1"></div>
+            <button onclick="createNewTrip()" class="ml-4 text-blue-600 hover:scale-110 transition"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
+        </div>
+    </nav>
+
+    <header class="bg-slate-900 text-white p-8 no-print shadow-inner">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-3xl font-black cursor-text p-1 rounded" title="點擊直接修改名稱">載入中...</h1>
+            <button onclick="window.print()" class="bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-blue-700 transition">匯出報表</button>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-1 space-y-6 no-print">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                <h3 class="font-bold text-gray-700 mb-4">👥 成員管理</h3>
+                <div id="memberList" class="flex flex-wrap gap-2 mb-4"></div>
+                <div class="flex gap-2"><input id="newMemberName" type="text" placeholder="名字" class="flex-1 border p-2 rounded-xl bg-gray-50"><button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl">新增</button></div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                <h3 class="font-bold text-gray-700 mb-4">💰 新增消費</h3>
+                <input id="itemName" type="text" placeholder="項目 (如：牛肉湯)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50">
+                <div class="flex gap-2 mb-3"><select id="payer" class="flex-1 border p-3 rounded-xl bg-gray-50"></select><input id="amount" type="number" placeholder="金額" class="w-24 border p-3 rounded-xl bg-gray-50"></div>
+                <div id="participantChecks" class="grid grid-cols-2 gap-2 mb-4"></div>
+                <button onclick="addRow()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-blue-200 shadow-xl hover:bg-blue-700 transition">加入清單</button>
+            </div>
+        </div>
+        <div class="lg:col-span-2 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-bold text-gray-700 mb-4">⚖️ 結算</h3><div id="balanceList" class="space-y-2"></div></div>
+                <div class="bg-blue-600 p-6 rounded-2xl text-white flex flex-col justify-center shadow-xl"><p class="text-blue-100">總支出</p><p id="totalSpent" class="text-5xl font-black mt-2">$0</p></div>
+            </div>
+            <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                <table class="w-full text-left"><thead class="bg-gray-50 text-gray-500 text-sm"><tr><th class="p-4">項目</th><th class="p-4">付款人</th><th class="p-4 text-right">金額</th></tr></thead><tbody id="expenseList" class="text-gray-700"></tbody></table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
