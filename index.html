@@ -10,7 +10,7 @@
         @media print { .no-print { display: none !important; } }
         .active-tab { border-bottom: 4px solid #3b82f6; color: #3b82f6; background: #eff6ff; font-weight: bold; }
         .tab { transition: all 0.3s; cursor: pointer; padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 8px; }
-        .member-col { min-width: 80px; text-align: center; border-left: 1px solid #f1f5f9; }
+        .member-col { min-width: 85px; text-align: center; border-left: 1px solid #f1f5f9; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -42,16 +42,11 @@
             </div>
             <div class="bg-white p-6 rounded-2xl shadow-sm border">
                 <h3 class="font-bold text-gray-700 mb-4">💰 新增消費</h3>
-                <input id="itemName" type="text" placeholder="項目 (如：午餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50">
-                <div class="flex gap-2 mb-3">
-                    <select id="payer" class="flex-1 border p-3 rounded-xl bg-gray-50 text-sm"></select>
-                    <input id="amount" type="number" placeholder="金額" class="w-24 border p-3 rounded-xl bg-gray-50">
-                </div>
+                <input id="itemName" type="text" placeholder="項目 (如：晚餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50">
+                <div class="flex gap-2 mb-3"><select id="payer" class="flex-1 border p-3 rounded-xl bg-gray-50 text-sm"></select><input id="amount" type="number" placeholder="金額" class="w-24 border p-3 rounded-xl bg-gray-50"></div>
                 <div class="flex justify-between items-center mb-2">
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">分帳人員 / 固定$</p>
-                    <label class="text-[10px] text-blue-500 cursor-pointer flex items-center gap-1">
-                        <input type="checkbox" id="selectAllBtn" checked onclick="toggleAllParticipants(this)"> 全選
-                    </label>
+                    <p class="text-[10px] text-gray-400 font-bold">分帳人員 / 固定$</p>
+                    <label class="text-[10px] text-blue-500 cursor-pointer flex items-center gap-1"><input type="checkbox" id="selectAllBtn" checked onclick="toggleAllParticipants(this)"> 全選</label>
                 </div>
                 <div id="participantChecks" class="space-y-2 mb-4 max-h-64 overflow-y-auto"></div>
                 <button onclick="addRow()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-blue-200 shadow-xl hover:bg-blue-700 transition">加入清單</button>
@@ -95,6 +90,14 @@
         onSnapshot(tripsRef, (docSnap) => {
             if (docSnap.exists()) {
                 window.trips = docSnap.data().trips || [];
+                // 自動修復舊資料格式
+                window.trips.forEach(trip => {
+                    trip.data.forEach(item => {
+                        item.participants = item.participants.map(p => 
+                            typeof p === 'string' ? { name: p, customAmount: null } : p
+                        );
+                    });
+                });
             } else {
                 window.trips = [{ id: Date.now(), name: '我的第一個專案', members: ['Paul'], data: [] }];
                 setDoc(tripsRef, { trips: window.trips });
@@ -106,8 +109,7 @@
         async function sync() { await setDoc(tripsRef, { trips: window.trips }); }
 
         window.toggleAllParticipants = (source) => {
-            const checkboxes = document.querySelectorAll('.participant-checkbox');
-            checkboxes.forEach(cb => cb.checked = source.checked);
+            document.querySelectorAll('.participant-checkbox').forEach(cb => cb.checked = source.checked);
         };
 
         window.deleteExpense = async (expenseId) => {
@@ -130,7 +132,10 @@
                 csv += row + "\n";
             });
             const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-            window.location.href = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${trip.name}_分帳.csv`;
+            link.click();
         };
 
         window.addRow = async () => {
@@ -158,6 +163,7 @@
                 const splitCount = participants.length - customCount;
                 const avg = splitCount > 0 ? remaining / splitCount : 0;
                 participants.forEach(p => { p.finalShare = p.customAmount !== null ? p.customAmount : avg; });
+                
                 trip.data.push({ id: Date.now(), name, payer, amount: totalAmount, participants });
                 document.getElementById('itemName').value = '';
                 document.getElementById('amount').value = '';
@@ -165,7 +171,15 @@
             }
         };
 
-        window.updateTripName = async () => { const el = document.getElementById('tripTitle'); const newName = el.innerText.trim(); const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); if (trip && newName && trip.name !== newName) { trip.name = newName; await sync(); } };
+        window.updateTripName = async () => { 
+            const el = document.getElementById('tripTitle'); 
+            const newName = el.innerText.trim(); 
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); 
+            if (trip && newName && trip.name !== newName && newName !== "載入中...") { 
+                trip.name = newName; 
+                await sync(); 
+            } 
+        };
         window.addMember = async () => { const name = document.getElementById('newMemberName').value.trim(); const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); if (name && !trip.members.includes(name)) { trip.members.push(name); document.getElementById('newMemberName').value = ''; await sync(); } };
         window.removeMember = async (name) => { const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); if (confirm(`移除「${name}」？`)) { trip.members = trip.members.filter(m => m !== name); await sync(); } };
         window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
@@ -178,7 +192,4 @@
 
             document.getElementById('tripTitle').innerText = trip.name;
             document.getElementById('tripTabs').innerHTML = window.trips.map(t => `<div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400'} group"><span>${t.name}</span><i onclick="deleteTrip(event, ${t.id})" class="fa-solid fa-trash-can text-[10px] hover:text-red-500 opacity-0 group-hover:opacity-100 transition"></i></div>`).join('');
-            document.getElementById('memberList').innerHTML = trip.members.map(m => `<span class="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-600 flex items-center gap-1">${m} <i onclick="removeMember('${m}')" class="fa-solid fa-times cursor-pointer hover:text-red-500"></i></span>`).join('');
-            document.getElementById('participantChecks').innerHTML = trip.members.map(m => `<div class="participant-row flex items-center justify-between bg-gray-50 p-2 rounded-lg"><label class="flex items-center space-x-2 truncate"><input type="checkbox" value="${m}" checked class="participant-checkbox w-4 h-4 text-blue-600"><span class="text-xs font-medium">${m}</span></label><input type="number" placeholder="固定$" class="custom-amount w-12 text-right text-[10px] bg-transparent border-b border-gray-300"></div>`).join('');
-            document.getElementById('payer').innerHTML = '<option value="" disabled selected>誰付錢？</option>' + trip.members.map(m => `<option value="${m}">${m}</option>`).join('');
-            document.getElementById('dynamicHeader').innerHTML = `<tr><th class="p-4">項目</th><th class="p-4">付款人</th>` +
+            document.getElementById('memberList').innerHTML =
