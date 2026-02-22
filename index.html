@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台南分帳神器 - 最終完美版</title>
+    <title>Paul的記帳軟體</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @media print { .no-print { display: none !important; } }
         .active-tab { border-bottom: 4px solid #3b82f6; color: #3b82f6; background: #eff6ff; font-weight: bold; }
-        .tab { transition: all 0.3s; cursor: pointer; padding: 8px 20px; border-radius: 99px; }
+        .tab { transition: all 0.3s; cursor: pointer; padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 8px; }
         #tripTitle:focus { border-bottom: 2px solid #3b82f6; outline: none; }
+        .delete-btn { opacity: 0; transition: opacity 0.2s; }
+        .tab:hover .delete-btn { opacity: 1; }
+        .member-tag:hover .remove-member { display: inline; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -39,7 +42,8 @@
             if (docSnap.exists()) {
                 window.trips = docSnap.data().trips || [];
             } else {
-                window.trips = [{ id: Date.now(), name: '台南美食之旅', members: ['Ariel', 'Kevin'], data: [] }];
+                // 預設初始化：Paul 的記帳軟體
+                window.trips = [{ id: Date.now(), name: '我的第一個專案', members: ['Paul'], data: [] }];
                 setDoc(tripsRef, { trips: window.trips });
             }
             if (!window.currentTripId && window.trips.length > 0) window.currentTripId = window.trips[0].id;
@@ -50,7 +54,7 @@
             await setDoc(tripsRef, { trips: window.trips });
         }
 
-        // 新增：更新旅程名稱功能
+        // 修改旅程名稱
         window.updateTripName = async () => {
             const el = document.getElementById('tripTitle');
             const newName = el.innerText.trim();
@@ -61,6 +65,7 @@
             }
         };
 
+        // 新增成員
         window.addMember = async () => {
             const name = document.getElementById('newMemberName').value.trim();
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
@@ -71,6 +76,16 @@
             }
         };
 
+        // 刪除成員
+        window.removeMember = async (name) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (confirm(`確定要移除成員「${name}」嗎？這將不會刪除已產生的帳目。`)) {
+                trip.members = trip.members.filter(m => m !== name);
+                await sync();
+            }
+        };
+
+        // 新增帳目
         window.addRow = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const name = document.getElementById('itemName').value;
@@ -91,10 +106,24 @@
             refreshAll();
         };
 
+        // 刪除整個專案
+        window.deleteTrip = async (e, id) => {
+            e.stopPropagation(); // 防止觸發 switchTrip
+            const trip = window.trips.find(t => t.id === id);
+            if (confirm(`⚠️ 確定要刪除整個專案「${trip.name}」嗎？資料刪除後無法找回。`)) {
+                window.trips = window.trips.filter(t => t.id !== id);
+                if (window.currentTripId == id) {
+                    window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
+                    localStorage.setItem('current_trip_id', window.currentTripId);
+                }
+                await sync();
+            }
+        };
+
         window.createNewTrip = async () => {
-            const name = prompt('新旅程名稱：', '新之旅');
+            const name = prompt('新專案名稱：', '新旅遊計畫');
             if (name) {
-                const newTrip = { id: Date.now(), name, members: [], data: [] };
+                const newTrip = { id: Date.now(), name, members: ['Paul'], data: [] };
                 window.trips.push(newTrip);
                 window.currentTripId = newTrip.id;
                 localStorage.setItem('current_trip_id', window.currentTripId);
@@ -104,19 +133,31 @@
 
         function refreshAll() {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)) || window.trips[0];
-            if (!trip) return;
+            if (!trip) {
+                document.body.innerHTML = '<div class="flex flex-col items-center justify-center h-screen"><p class="text-gray-400 mb-4">目前沒有任何專案</p><button onclick="createNewTrip()" class="bg-blue-600 text-white px-6 py-2 rounded-xl">點此建立新專案</button></div>';
+                return;
+            }
 
             document.getElementById('tripTitle').innerText = trip.name;
             document.getElementById('tripTabs').innerHTML = window.trips.map(t => `
-                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400'}">
-                    ${t.name}
+                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400'} group">
+                    <span>${t.name}</span>
+                    <i onclick="deleteTrip(event, ${t.id})" class="fa-solid fa-trash-can text-xs hover:text-red-500 delete-btn"></i>
                 </div>
             `).join('');
 
             const mList = document.getElementById('memberList');
             const mChecks = document.getElementById('participantChecks');
             const mSelect = document.getElementById('payer');
-            mList.innerHTML = trip.members.map(m => `<span class="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-600">${m}</span>`).join('');
+            
+            // 渲染帶有刪除按鈕的成員標籤
+            mList.innerHTML = trip.members.map(m => `
+                <span class="member-tag bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-600 flex items-center gap-1">
+                    ${m}
+                    <i onclick="removeMember('${m}')" class="fa-solid fa-times cursor-pointer hover:text-red-500"></i>
+                </span>
+            `).join('');
+            
             mChecks.innerHTML = trip.members.map(m => `<label class="flex items-center space-x-2 bg-gray-50 p-2 rounded-lg"><input type="checkbox" value="${m}" checked> <span class="text-sm">${m}</span></label>`).join('');
             mSelect.innerHTML = '<option value="" disabled selected>誰付錢？</option>' + trip.members.map(m => `<option value="${m}">${m}</option>`).join('');
 
@@ -127,7 +168,7 @@
                 total += item.amount;
                 balances[item.payer] += item.amount;
                 const share = item.amount / item.participants.length;
-                item.participants.forEach(p => balances[p] -= share);
+                item.participants.forEach(p => { if(balances.hasOwnProperty(p)) balances[p] -= share; });
                 return `<tr class="border-b"><td class="p-4">${item.name}</td><td class="p-4">${item.payer}</td><td class="p-4 text-right font-bold">$${item.amount.toLocaleString()}</td></tr>`;
             }).join('');
 
@@ -141,6 +182,7 @@
 
     <nav class="bg-white border-b p-4 no-print sticky top-0 z-10 shadow-sm">
         <div class="max-w-6xl mx-auto flex items-center">
+            <div class="font-black text-blue-600 mr-6 text-lg">Paul的記帳軟體</div>
             <div id="tripTabs" class="flex space-x-2 overflow-x-auto flex-1 p-1"></div>
             <button onclick="createNewTrip()" class="ml-4 text-blue-600 hover:scale-110 transition"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
         </div>
@@ -148,7 +190,7 @@
 
     <header class="bg-slate-900 text-white p-8 no-print shadow-inner">
         <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-3xl font-black cursor-text p-1 rounded" title="點擊直接修改名稱">載入中...</h1>
+            <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-3xl font-black cursor-text p-1 rounded" title="點擊直接修改專案名稱">載入中...</h1>
             <button onclick="window.print()" class="bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-blue-700 transition">匯出報表</button>
         </div>
     </header>
@@ -156,14 +198,15 @@
     <main class="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="lg:col-span-1 space-y-6 no-print">
             <div class="bg-white p-6 rounded-2xl shadow-sm border">
-                <h3 class="font-bold text-gray-700 mb-4">👥 成員管理</h3>
+                <h3 class="font-bold text-gray-700 mb-4">👥 參與分帳人員</h3>
                 <div id="memberList" class="flex flex-wrap gap-2 mb-4"></div>
-                <div class="flex gap-2"><input id="newMemberName" type="text" placeholder="名字" class="flex-1 border p-2 rounded-xl bg-gray-50"><button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl">新增</button></div>
+                <div class="flex gap-2"><input id="newMemberName" type="text" placeholder="新增人員名字" class="flex-1 border p-2 rounded-xl bg-gray-50"><button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl">新增</button></div>
             </div>
             <div class="bg-white p-6 rounded-2xl shadow-sm border">
                 <h3 class="font-bold text-gray-700 mb-4">💰 新增消費</h3>
-                <input id="itemName" type="text" placeholder="項目 (如：牛肉湯)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50">
+                <input id="itemName" type="text" placeholder="項目 (如：午餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50">
                 <div class="flex gap-2 mb-3"><select id="payer" class="flex-1 border p-3 rounded-xl bg-gray-50"></select><input id="amount" type="number" placeholder="金額" class="w-24 border p-3 rounded-xl bg-gray-50"></div>
+                <p class="text-xs text-gray-400 mb-2">誰要分這筆錢？</p>
                 <div id="participantChecks" class="grid grid-cols-2 gap-2 mb-4"></div>
                 <button onclick="addRow()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-blue-200 shadow-xl hover:bg-blue-700 transition">加入清單</button>
             </div>
