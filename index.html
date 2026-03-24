@@ -7,95 +7,112 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; --text-color: #1e293b; --border-color: #e2e8f0; --tab-active-bg: #eff6ff; }
-        body { background-color: var(--bg-color); color: var(--text-color); transition: all 0.5s; font-family: sans-serif; }
-        .active-tab { border-bottom: 4px solid var(--primary-color); color: var(--primary-color); background: var(--tab-active-bg); font-weight: bold; }
-        .tab { transition: all 0.3s; cursor: pointer; padding: 6px 12px; border-radius: 99px; display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; position: relative; }
-        .tab:hover .delete-trip { opacity: 1; }
-        .delete-trip { opacity: 0; color: #ef4444; transition: 0.2s; font-size: 12px; }
-        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; cursor: pointer; transition: transform 0.2s; }
-        .avatar:hover { transform: scale(1.1); border-color: var(--primary-color); }
-        .member-col { min-width: 90px; text-align: center; border-left: 1px solid var(--border-color); }
-        header { background-color: var(--header-bg); transition: background 0.5s; }
-        #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; --text-color: #1e293b; --border-color: #e2e8f0; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; cursor: pointer; }
+        .error-border { border: 2px solid #ef4444 !important; }
+        .error-msg { color: #ef4444; font-size: 11px; font-weight: bold; margin-top: -8px; margin-bottom: 8px; display: none; }
+        header { background-color: var(--header-bg); }
+        #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); width: 90%; max-width: 350px; }
         .picker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .expanded { max-height: 200px; }
         @media print { .no-print { display: none !important; } }
     </style>
 </head>
-<body class="min-h-screen pb-20">
-    <div id="avatarPicker" class="card">
+<body class="min-h-screen pb-10">
+    <div id="avatarPicker">
         <h3 class="font-bold mb-4 text-center">選擇頭像</h3>
         <div class="picker-grid" id="pickerGrid"></div>
-        <button onclick="closePicker()" class="w-full mt-4 bg-gray-200 py-2 rounded-xl text-sm font-bold">取消</button>
+        <button onclick="closePicker()" class="w-full mt-4 bg-gray-100 py-2 rounded-xl text-sm font-bold">取消</button>
     </div>
 
-    <nav class="bg-white border-b p-4 sticky top-0 z-10 shadow-sm no-print">
-        <div class="max-w-6xl mx-auto flex items-center">
-            <div class="font-black text-blue-600 mr-6 text-lg">Paul的分帳神器</div>
-            <div id="tripTabs" class="flex space-x-2 overflow-x-auto flex-1 p-1"></div>
-            <button onclick="createNewTrip()" class="ml-4 text-blue-600 hover:scale-110 transition"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
+    <nav class="bg-white border-b p-3 sticky top-0 z-10 shadow-sm no-print">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="font-black text-blue-600 text-base">Paul的分帳神器</div>
+            <div class="flex items-center gap-2">
+                <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 border-none rounded-lg px-3 py-1.5 text-sm font-bold outline-none"></select>
+                <button onclick="createNewTrip()" class="text-blue-600 hover:scale-110"><i class="fa-solid fa-plus-circle text-xl"></i></button>
+            </div>
         </div>
     </nav>
 
-    <header class="text-white p-8 shadow-inner no-print">
-        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-4">
-                <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-3xl font-black cursor-text p-1 rounded hover:bg-white/10 transition">載入中...</h1>
-                <select id="themeSelector" onchange="changeTheme(this.value)" class="bg-white/20 text-white border border-white/30 rounded-lg px-2 py-1 text-sm outline-none focus:bg-white focus:text-slate-900 transition font-bold">
-                    <option value="classic">經典風格</option><option value="cool">酷炫科技</option>
-                    <option value="spring">粉嫩春天</option><option value="winter">純淨冬天</option>
-                    <option value="summer">熱情夏天</option><option value="autumn">楓葉秋天</option>
-                </select>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="exportToCSV()" class="bg-green-600 px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-green-700 transition"><i class="fa-solid fa-file-excel mr-1"></i>匯出 CSV</button>
-                <button onclick="window.print()" class="bg-blue-600 px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-blue-700 transition">列印報表</button>
+    <header class="text-white p-6 no-print">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-2xl font-black p-1 rounded hover:bg-white/10">載入中...</h1>
+                    <button onclick="toggleTools()" class="bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold border border-white/20"><i class="fa-solid fa-screwdriver-wrench mr-1"></i>工具選單</button>
+                </div>
+                
+                <div id="toolPanel" class="collapsible-content flex flex-wrap gap-2">
+                    <div class="bg-white/10 p-3 rounded-xl border border-white/10 w-full flex flex-wrap gap-2">
+                        <select id="themeSelector" onchange="changeTheme(this.value)" class="bg-slate-800 text-white rounded-lg px-3 py-1.5 text-xs font-bold border border-white/20">
+                            <option value="classic">經典風格</option><option value="cool">酷炫科技</option><option value="spring">粉嫩春天</option>
+                            <option value="winter">純淨冬天</option><option value="summer">熱情夏天</option><option value="autumn">楓葉秋天</option>
+                        </select>
+                        <button onclick="exportToCSV()" class="bg-green-600 px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-file-excel mr-1"></i>CSV</button>
+                        <button onclick="window.print()" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>列印報表</button>
+                        <button onclick="deleteTripBtn()" class="bg-red-500/80 px-3 py-1.5 rounded-lg text-xs font-bold ml-auto"><i class="fa-solid fa-trash mr-1"></i>刪除專案</button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div class="lg:col-span-1 space-y-6 no-print">
-            <div class="card">
-                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-blue-500"></i>分帳人員</h3>
-                <div id="memberList" class="space-y-2 mb-4"></div>
-                <div class="flex gap-2">
-                    <input id="newMemberName" type="text" placeholder="姓名" class="flex-1 border p-2 rounded-xl bg-gray-50 text-sm outline-none">
-                    <button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold">新增</button>
+    <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="lg:col-span-1 space-y-4 no-print">
+            <div class="card bg-blue-50/50 border-blue-100">
+                <h3 class="font-bold mb-4 flex items-center gap-2 text-blue-600 text-sm"><i class="fa-solid fa-cart-plus"></i> 新增消費與人員</h3>
+                
+                <div id="itemNameError" class="error-msg">⚠️ 請輸入項目名稱（如：晚餐）</div>
+                <input id="itemName" type="text" placeholder="項目（如：晚餐）" class="w-full border p-3 rounded-xl mb-3 bg-white outline-none text-sm shadow-sm">
+                
+                <div id="amountError" class="error-msg">⚠️ 請輸入有效金額</div>
+                <div class="flex border rounded-xl overflow-hidden mb-3 bg-white shadow-sm">
+                    <select id="currency" class="bg-gray-50 px-2 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
+                    <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold text-sm">
                 </div>
-            </div>
 
-            <div class="card">
-                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-cart-plus text-orange-500"></i>新增消費</h3>
-                <input id="itemName" type="text" placeholder="項目" class="w-full border p-3 rounded-xl mb-3 bg-gray-50 outline-none">
-                <div class="flex border rounded-xl overflow-hidden mb-3 bg-gray-50">
-                    <select id="currency" class="bg-gray-100 px-2 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
-                    <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold">
+                <div class="mb-4">
+                    <p class="text-[10px] text-gray-400 font-bold mb-2 uppercase tracking-tighter">付款人</p>
+                    <select id="payer" class="w-full border p-2 rounded-xl bg-white font-bold text-sm shadow-sm"></select>
                 </div>
-                <div class="bg-blue-50 p-3 rounded-xl mb-3"><p class="text-[10px] text-blue-500 font-bold mb-1">付款人</p><select id="payer" class="w-full border-none bg-transparent font-bold"></select></div>
-                <div id="participantChecks" class="space-y-1 mb-4"></div>
-                <button id="addBtn" onclick="addRow()" class="w-full text-white py-4 rounded-2xl font-black shadow-xl" style="background-color: var(--primary-color);">加入帳目</button>
+
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">參與成員</p>
+                        <div class="flex items-center gap-1">
+                            <input id="newMemberName" type="text" placeholder="+ 新增成員" class="text-[10px] border-b bg-transparent outline-none w-16 px-1">
+                            <button onclick="addMember()" class="text-blue-500"><i class="fa-solid fa-plus-circle text-sm"></i></button>
+                        </div>
+                    </div>
+                    <div id="memberCheckGrid" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1"></div>
+                </div>
+
+                <button id="addBtn" onclick="addRow()" class="w-full text-white py-3.5 rounded-2xl font-black shadow-lg text-sm transition-transform active:scale-95" style="background-color: var(--primary-color);">加入帳目</button>
             </div>
+            
+            <div class="card"><h3 class="font-bold mb-3 text-sm">⚖️ 結算概覽</h3><div id="balanceList" class="space-y-2 text-xs"></div></div>
         </div>
 
-        <div class="lg:col-span-3 space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="card"><h3 class="font-bold mb-4">⚖️ 個人結算</h3><div id="balanceList" class="space-y-2 text-sm"></div></div>
-                <div class="card border-green-100"><h3 class="font-bold text-green-700 mb-4">🚀 轉帳建議</h3><div id="settlementAdvice" class="space-y-2 text-sm text-gray-600"></div></div>
-                <div id="totalCard" class="p-6 rounded-3xl text-white flex flex-col justify-center shadow-xl" style="background-color: var(--primary-color);"><p class="text-white/80 font-bold">總支出 (TWD)</p><p id="totalSpent" class="text-4xl font-black mt-2">$0</p></div>
+        <div class="lg:col-span-3 space-y-4">
+            <div id="totalCard" class="p-6 rounded-3xl text-white shadow-xl flex justify-between items-end" style="background-color: var(--primary-color);">
+                <div><p class="text-white/80 font-bold text-xs">總支出 (TWD)</p><p id="totalSpent" class="text-4xl font-black mt-1">$0</p></div>
+                <div id="settlementAdvice" class="text-[10px] text-white/90 bg-black/20 p-2 rounded-xl text-right max-w-[50%]"></div>
             </div>
 
-            <div class="card overflow-x-auto p-0 border-none">
-                <table class="w-full text-left min-w-[900px]">
-                    <thead class="bg-gray-50 text-gray-500 text-[10px] font-black border-b"><tr id="dynamicHeader"></tr></thead>
-                    <tbody id="expenseList" class="text-sm"></tbody>
+            <div class="card overflow-x-auto p-0 border-none shadow-sm">
+                <table class="w-full text-left min-w-[600px]">
+                    <thead class="bg-gray-50 text-gray-400 text-[10px] font-black border-b uppercase tracking-widest"><tr id="dynamicHeader"></tr></thead>
+                    <tbody id="expenseList" class="text-xs"></tbody>
                 </table>
             </div>
 
-            <div class="bg-gray-100/50 p-6 rounded-2xl border-2 border-dashed border-gray-300 no-print">
-                <h3 class="font-bold text-gray-400 mb-4 text-xs uppercase tracking-widest"><i class="fa-solid fa-history"></i> 編輯歷史 (還原至此版本)</h3>
-                <div id="historyList" class="space-y-2 max-h-40 overflow-y-auto text-xs"></div>
+            <div class="bg-gray-100/50 p-4 rounded-2xl border-2 border-dashed border-gray-200 no-print">
+                <h3 class="font-bold text-gray-400 mb-2 text-[10px] uppercase"><i class="fa-solid fa-history mr-1"></i>歷史紀錄 (點擊還原)</h3>
+                <div id="historyList" class="flex flex-wrap gap-2"></div>
             </div>
         </div>
     </main>
@@ -108,40 +125,27 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
-        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/219/219983.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154444.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154460.png', 'https://cdn-icons-png.flaticon.com/512/6997/6997662.png', 'https://cdn-icons-png.flaticon.com/512/6997/6997674.png'];
+        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/219/219983.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154444.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154460.png'];
 
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
         window.activeMemberName = "";
 
         const themes = {
-            classic: { primary: '#3b82f6', bg: '#f8fafc', card: '#ffffff', header: '#0f172a', text: '#1e293b', border: '#e2e8f0', tab: '#eff6ff' },
-            cool: { primary: '#00d2ff', bg: '#0b0e14', card: '#161b22', header: '#010409', text: '#c9d1d9', border: '#30363d', tab: '#1f2937' },
-            spring: { primary: '#ec4899', bg: '#fff5f7', card: '#ffffff', header: '#db2777', text: '#831843', border: '#fce7f3', tab: '#fdf2f8' },
-            winter: { primary: '#0ea5e9', bg: '#f0f9ff', card: '#ffffff', header: '#0c4a6e', text: '#0c4a6e', border: '#e0f2fe', tab: '#f0f9ff' },
-            summer: { primary: '#f59e0b', bg: '#fffbeb', card: '#ffffff', header: '#b45309', text: '#78350f', border: '#fef3c7', tab: '#fffbeb' },
-            autumn: { primary: '#d97706', bg: '#fff7ed', card: '#ffffff', header: '#7c2d12', text: '#431407', border: '#ffedd5', tab: '#fff7ed' }
+            classic: { primary: '#3b82f6', bg: '#f8fafc', header: '#0f172a' },
+            cool: { primary: '#0ea5e9', bg: '#0b0e14', header: '#010409' },
+            spring: { primary: '#ec4899', bg: '#fff5f7', header: '#db2777' },
+            winter: { primary: '#0ea5e9', bg: '#f0f9ff', header: '#0c4a6e' },
+            summer: { primary: '#f59e0b', bg: '#fffbeb', header: '#b45309' },
+            autumn: { primary: '#d97706', bg: '#fff7ed', header: '#7c2d12' }
         };
-
-        function applyTheme(key) {
-            const t = themes[key] || themes.classic;
-            const root = document.documentElement;
-            root.style.setProperty('--primary-color', t.primary);
-            root.style.setProperty('--bg-color', t.bg);
-            root.style.setProperty('--card-bg', t.card);
-            root.style.setProperty('--header-bg', t.header);
-            root.style.setProperty('--text-color', t.text);
-            root.style.setProperty('--border-color', t.border);
-            root.style.setProperty('--tab-active-bg', t.tab);
-            document.getElementById('themeSelector').value = key;
-        }
 
         async function sync(action) {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip) {
                 if (!trip.history) trip.history = [];
-                trip.history.unshift({ time: new Date().toLocaleString(), action, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
-                if (trip.history.length > 10) trip.history.pop();
+                trip.history.unshift({ time: new Date().toLocaleTimeString(), action, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
+                if (trip.history.length > 5) trip.history.pop();
             }
             await setDoc(tripsRef, { trips: window.trips });
         }
@@ -154,100 +158,114 @@
             }
         });
 
+        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
+
         window.refreshAll = () => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)) || window.trips[0];
-            if (!trip) { document.getElementById('tripTitle').innerText = "請按 + 建立新專案"; document.getElementById('tripTabs').innerHTML = ""; return; }
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (!trip) { document.getElementById('tripTitle').innerText = "建立新專案"; return; }
             
-            applyTheme(trip.theme || 'classic');
+            const t = themes[trip.theme || 'classic'];
+            document.documentElement.style.setProperty('--primary-color', t.primary);
+            document.documentElement.style.setProperty('--bg-color', t.bg);
+            document.documentElement.style.setProperty('--header-bg', t.header);
+
             document.getElementById('tripTitle').innerText = trip.name;
-            document.getElementById('tripTabs').innerHTML = window.trips.map(t => `
-                <div class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab' : 'text-gray-400'}">
-                    <span onclick="switchTrip(${t.id})">${t.name}</span>
-                    <i onclick="deleteTrip(${t.id})" class="fa-solid fa-circle-xmark delete-trip"></i>
-                </div>
-            `).join('');
+            document.getElementById('tripDropdown').innerHTML = window.trips.map(t => `<option value="${t.id}" ${String(t.id) === String(window.currentTripId) ? 'selected' : ''}>${t.name}</option>`).join('');
 
             if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
-            document.getElementById('memberList').innerHTML = trip.members.map(m => `
-                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
-                    <div class="flex items-center gap-2"><img src="${m.photo || AVATARS[0]}" class="avatar" onclick="openPicker('${m.name}')"><span class="font-bold">${m.name || '未命名'}</span></div>
-                    <i onclick="removeMember('${m.name}')" class="fa-solid fa-times text-gray-300 hover:text-red-500 cursor-pointer"></i>
+            document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+            document.getElementById('memberCheckGrid').innerHTML = trip.members.map(m => `
+                <div class="flex items-center gap-2 bg-white border border-gray-100 p-1.5 rounded-xl shadow-sm">
+                    <img src="${m.photo || AVATARS[0]}" class="avatar" onclick="openPicker('${m.name}')">
+                    <label class="text-[10px] font-bold flex-1 truncate">${m.name}</label>
+                    <input type="checkbox" value="${m.name}" checked class="participant-checkbox scale-75">
                 </div>`).join('');
 
-            document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
-            document.getElementById('participantChecks').innerHTML = trip.members.map(m => `
-                <div class="flex items-center justify-between p-1"><label class="text-xs font-bold flex items-center gap-2"><input type="checkbox" value="${m.name}" checked class="participant-checkbox"> ${m.name}</label></div>`).join('');
-
             let totalTWD = 0; let bals = {}; trip.members.forEach(m => bals[m.name] = 0);
-            document.getElementById('dynamicHeader').innerHTML = `<th class="p-4">項目/日期</th><th class="p-4">付款人</th>` + trip.members.map(m => `<th class="p-4 member-col">${m.name}</th>`).join('') + `<th class="p-4 text-right">總額</th><th class="p-4"></th>`;
+            document.getElementById('dynamicHeader').innerHTML = `<th class="p-4">項目</th>` + trip.members.map(m => `<th class="p-4 text-center">${m.name}</th>`).join('') + `<th class="p-4 text-right">總計</th><th class="p-4"></th>`;
 
             document.getElementById('expenseList').innerHTML = (trip.data || []).map(item => {
                 totalTWD += item.amount; if(bals[item.payer] !== undefined) bals[item.payer] += item.amount;
                 let cells = trip.members.map(m => {
                     const p = item.participants.find(part => (part.name === m.name || part === m.name));
                     if (p) {
-                        const share = (typeof p === 'object' && p.finalShare) ? p.finalShare : (item.amount / item.participants.length);
+                        const share = item.amount / item.participants.length;
                         if(bals[m.name] !== undefined) bals[m.name] -= share;
-                        return `<td class="p-4 member-col text-blue-500 font-bold">✔️ $${Math.round(share)}</td>`;
+                        return `<td class="p-4 text-center text-blue-500 font-bold">✔️</td>`;
                     }
-                    return `<td class="p-4 member-col text-gray-200">-</td>`;
+                    return `<td class="p-4 text-center text-gray-200">-</td>`;
                 }).join('');
-                return `<tr class="border-b"><td class="p-4"><div class="font-bold">${item.name}</div><div class="text-[9px] text-gray-400">${item.date || ""} ${item.rateInfo || ""}</div></td><td class="p-4">${item.payer}</td>${cells}<td class="p-4 text-right font-black">$${Math.round(item.amount).toLocaleString()}</td><td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 hover:text-red-500 cursor-pointer"></i></td></tr>`;
+                return `<tr class="border-b">
+                    <td class="p-4"><div class="font-bold">${item.name}</div><div class="text-[9px] text-gray-400">${item.date} ${item.rateInfo || ""}</div></td>
+                    ${cells}<td class="p-4 text-right font-black">$${Math.round(item.amount).toLocaleString()}</td>
+                    <td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 hover:text-red-500 cursor-pointer"></i></td>
+                </tr>`;
             }).join('');
 
             document.getElementById('totalSpent').innerText = `$${Math.round(totalTWD).toLocaleString()}`;
             document.getElementById('balanceList').innerHTML = trip.members.map(m => `<div class="flex justify-between p-2 rounded-xl ${bals[m.name]>=0?'bg-green-50 text-green-700':'bg-red-50 text-red-700'}"><span class="font-bold">${m.name}</span><b>${Math.round(bals[m.name])}</b></div>`).join('');
-            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `<div class="flex justify-between bg-white p-2 rounded border"><span>${h.action} (${h.time})</span><button onclick="restoreHistory(${i})" class="bg-gray-800 text-white px-2 py-0.5 rounded">還原</button></div>`).join('');
+            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `<button onclick="restoreHistory(${i})" class="bg-white px-2 py-1 rounded-lg border text-[10px] shadow-sm">${h.action}</button>`).join('');
         };
 
         window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.deleteTrip = async (id) => {
-            if (!confirm("確定要刪除整個專案嗎？此動作無法復原。")) return;
-            window.trips = window.trips.filter(t => t.id !== id);
-            if (window.currentTripId === id) window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
-            await setDoc(tripsRef, { trips: window.trips });
-        };
         window.createNewTrip = async () => {
-            const n = prompt('專案名稱：', '新計畫');
+            const n = prompt('專案名稱：', '新旅遊計畫');
             if (n) {
                 const nt = { id: Date.now(), name: n, members: [{name: 'Paul', photo: AVATARS[0]}], data: [], history: [], theme: 'classic' };
                 window.trips.push(nt); window.currentTripId = nt.id; await sync("建立專案");
             }
         };
+        window.deleteTripBtn = async () => {
+            if (confirm("確定刪除此專案？")) {
+                window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
+                window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
+                await setDoc(tripsRef, { trips: window.trips });
+            }
+        };
+
         window.addMember = async () => {
             const n = document.getElementById('newMemberName').value.trim();
             if (!n) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip.members.find(m => m.name === n)) return alert("姓名重複");
             trip.members.push({name: n, photo: AVATARS[Math.floor(Math.random()*AVATARS.length)]});
-            await sync(`新增成員 ${n}`);
             document.getElementById('newMemberName').value = '';
+            await sync(`新增成員 ${n}`);
         };
-        window.removeMember = async (n) => {
+
+        window.addRow = async () => {
+            const nameInp = document.getElementById('itemName');
+            const amtInp = document.getElementById('amount');
+            const nameErr = document.getElementById('itemNameError');
+            const amtErr = document.getElementById('amountError');
+            
+            let hasError = false;
+            nameInp.classList.remove('error-border'); amtInp.parentElement.classList.remove('error-border');
+            nameErr.style.display = 'none'; amtErr.style.display = 'none';
+
+            if (!nameInp.value.trim()) { nameInp.classList.add('error-border'); nameErr.style.display = 'block'; hasError = true; }
+            if (!amtInp.value || parseFloat(amtInp.value) <= 0) { amtInp.parentElement.classList.add('error-border'); amtErr.style.display = 'block'; hasError = true; }
+            if (hasError) return;
+
+            let amount = parseFloat(amtInp.value);
+            const curr = document.getElementById('currency').value;
+            const payer = document.getElementById('payer').value;
+            let rateInfo = "";
+            if (curr === 'JPY') { const rate = 0.215; rateInfo = `(JPY ${amount} * ${rate})`; amount *= rate; }
+            
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            trip.members = trip.members.filter(m => m.name !== n);
-            await sync(`刪除成員 ${n}`);
+            const selected = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert("請至少勾選一名參與人");
+
+            trip.data.unshift({ id: Date.now(), name: nameInp.value, amount, payer, participants: selected, rateInfo, date: new Date().toLocaleDateString() });
+            await sync(`新增項目: ${nameInp.value}`);
+            nameInp.value = ''; amtInp.value = '';
         };
+
         window.deleteExpense = async (id) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             trip.data = trip.data.filter(d => d.id !== id);
             await sync("刪除帳目");
-        };
-        window.addRow = async () => {
-            const name = document.getElementById('itemName').value;
-            let amount = parseFloat(document.getElementById('amount').value);
-            const curr = document.getElementById('currency').value;
-            const payer = document.getElementById('payer').value;
-            if (!name || isNaN(amount)) return;
-
-            let rateInfo = "";
-            if (curr === 'JPY') { const rate = 0.215; rateInfo = `(JPY ${amount} * ${rate})`; amount *= rate; }
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const selected = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
-            const parts = selected.map(s => ({ name: s, finalShare: amount / selected.length }));
-
-            trip.data.unshift({ id: Date.now(), name, amount, payer, participants: parts, rateInfo, date: new Date().toLocaleDateString() });
-            await sync(`新增: ${name}`);
-            document.getElementById('itemName').value = ''; document.getElementById('amount').value = '';
         };
 
         window.openPicker = (name) => { window.activeMemberName = name; document.getElementById('avatarPicker').style.display = 'block'; document.getElementById('pickerGrid').innerHTML = AVATARS.map(url => `<img src="${url}" class="avatar w-12 h-12" onclick="selectAvatar('${url}')">`).join(''); };
@@ -258,6 +276,7 @@
             if (m) { m.photo = url; await sync("更換頭像"); }
             closePicker();
         };
+
         window.exportToCSV = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             let csv = "\uFEFF項目,日期,付款人,總額(TWD)\n";
@@ -265,17 +284,20 @@
             const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
             link.download = `${trip.name}.csv`; link.click();
         };
+
         window.restoreHistory = async (i) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             trip.data = JSON.parse(JSON.stringify(trip.history[i].data));
             trip.members = JSON.parse(JSON.stringify(trip.history[i].members));
             await setDoc(tripsRef, { trips: window.trips });
         };
+
         window.updateTripName = async () => {
             const newName = document.getElementById('tripTitle').innerText.trim();
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip && newName && newName !== trip.name) { trip.name = newName; await sync("重新命名專案"); }
         };
+
         window.changeTheme = async (val) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip) { trip.theme = val; applyTheme(val); await setDoc(tripsRef, { trips: window.trips }); }
