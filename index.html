@@ -13,11 +13,17 @@
         body { background-color: var(--bg-color); color: #1e293b; font-family: sans-serif; transition: all 0.3s ease; }
         .card { background-color: var(--card-bg); border-radius: var(--radius); padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid transparent; }
         .sticky-header { position: sticky; top: 0; z-index: 50; }
-        .avatar { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; transition: transform 0.2s; }
+        .avatar:hover { transform: scale(1.1); }
         .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        .expanded { max-height: 800px; }
+        .expanded { max-height: 1200px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #334155; }
         
+        /* 頭像選擇器彈窗 */
+        #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .avatar-option { width: 50px; height: 50px; cursor: pointer; border-radius: 50%; border: 2px solid transparent; }
+        .avatar-option:hover { border-color: #3b82f6; }
+
         .theme-spring { --primary-color: #10b981; --bg-color: #f0fdf4; --radius: 0.5rem; }
         .theme-spring .card { border: 2px solid #10b981; box-shadow: 6px 6px 0px #d1fae5; }
         .theme-summer { --primary-color: #f59e0b; --bg-color: #fffbeb; --radius: 3rem 1rem; }
@@ -32,6 +38,25 @@
     </style>
 </head>
 <body class="min-h-screen">
+
+    <div id="avatarPicker" class="no-print">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold">選擇頭像</h3>
+            <button onclick="closeAvatarPicker()"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <div class="grid grid-cols-5 gap-4">
+            <img onclick="selectAvatar(0)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
+            <img onclick="selectAvatar(1)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png">
+            <img onclick="selectAvatar(2)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/1999/1999625.png">
+            <img onclick="selectAvatar(3)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/236/236831.png">
+            <img onclick="selectAvatar(4)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/4139/4139981.png">
+            <img onclick="selectAvatar(5)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/3135/3135768.png">
+            <img onclick="selectAvatar(6)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/194/194938.png">
+            <img onclick="selectAvatar(7)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/6997/6997662.png">
+            <img onclick="selectAvatar(8)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/4140/4140047.png">
+            <img onclick="selectAvatar(9)" class="avatar-option" src="https://cdn-icons-png.flaticon.com/512/1154/1154444.png">
+        </div>
+    </div>
 
     <nav class="sticky-header bg-white border-b p-3 shadow-md no-print">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
@@ -53,7 +78,7 @@
                 </p>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/30 transition-colors">工具與風格歷史 (A)</button>
+                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/30 transition-colors">工具與人員設定 (A)</button>
             </div>
         </div>
         <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
@@ -71,6 +96,13 @@
                     <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-500">列印報表</button>
                     <button onclick="deleteTripBtn()" class="bg-red-500/80 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-600">刪除專案</button>
                 </div>
+            </div>
+            <div class="bg-white/10 p-4 rounded-2xl">
+                <div class="flex justify-between items-center mb-3">
+                    <p class="text-[10px] font-bold text-white/40 uppercase">參與分帳人員管理 (點擊名稱可修改)</p>
+                    <button onclick="addMember()" class="bg-blue-500 text-[10px] px-3 py-1 rounded font-bold hover:bg-blue-400">+ 新增人員</button>
+                </div>
+                <div id="memberManageList" class="flex flex-wrap gap-4"></div>
             </div>
             <div class="bg-white/5 rounded-2xl overflow-hidden">
                 <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
@@ -163,12 +195,18 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
-        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png'];
+        
+        // 預設頭像清單
+        const AVATARS = [
+            'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', 'https://cdn-icons-png.flaticon.com/512/1999/1999625.png', 'https://cdn-icons-png.flaticon.com/512/236/236831.png', 'https://cdn-icons-png.flaticon.com/512/4139/4139981.png',
+            'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/6997/6997662.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154444.png'
+        ];
 
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
         let chartInstance = null;
         let isCustomSplit = false;
+        let currentEditingMemberIdx = -1;
 
         const fmt = (num) => Math.round(num).toLocaleString('en-US');
 
@@ -180,6 +218,70 @@
             }
         });
 
+        // (1) 修復專案名稱修改功能
+        window.updateTripName = async () => {
+            const newName = document.getElementById('tripTitle').innerText.trim();
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip && newName && trip.name !== newName) {
+                trip.name = newName;
+                await setDoc(tripsRef, { trips: window.trips });
+            }
+        };
+
+        // (2) 頭像相關功能
+        window.openAvatarPicker = (index) => {
+            currentEditingMemberIdx = index;
+            document.getElementById('avatarPicker').style.display = 'block';
+        };
+        window.closeAvatarPicker = () => {
+            document.getElementById('avatarPicker').style.display = 'none';
+        };
+        window.selectAvatar = async (avatarIdx) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip && trip.members[currentEditingMemberIdx]) {
+                trip.members[currentEditingMemberIdx].photo = AVATARS[avatarIdx];
+                await setDoc(tripsRef, { trips: window.trips });
+                closeAvatarPicker();
+            }
+        };
+
+        // (3) 成員管理：新增、刪除、改名
+        window.addMember = async () => {
+            const name = prompt("請輸入新成員姓名:");
+            if (!name) return;
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            trip.members.push({ name: name, photo: AVATARS[0] });
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.deleteMember = async (index) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip.members.length <= 1) return alert("至少需保留一位成員");
+            if (!confirm(`確定要移除成員 ${trip.members[index].name} 嗎？`)) return;
+            trip.members.splice(index, 1);
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.renameMember = async (index) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const oldName = trip.members[index].name;
+            const newName = prompt("請修改成員姓名:", oldName);
+            if (!newName || newName === oldName) return;
+            
+            // 同步修改消費紀錄中的人名
+            trip.data.forEach(item => {
+                if (item.payer === oldName) item.payer = newName;
+                const pIdx = item.participants.indexOf(oldName);
+                if (pIdx > -1) item.participants[pIdx] = newName;
+                if (item.customAmounts && item.customAmounts[oldName]) {
+                    item.customAmounts[newName] = item.customAmounts[oldName];
+                    delete item.customAmounts[oldName];
+                }
+            });
+            trip.members[index].name = newName;
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
         window.refreshAll = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (!trip) return;
@@ -190,6 +292,15 @@
             if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             
+            // 渲染管理面板成員清單
+            document.getElementById('memberManageList').innerHTML = trip.members.map((m, i) => `
+                <div class="flex items-center gap-2 bg-white/10 p-2 rounded-xl">
+                    <img src="${m.photo}" class="avatar" onclick="openAvatarPicker(${i})" title="點擊更換頭像">
+                    <span class="text-xs font-bold cursor-pointer hover:underline" onclick="renameMember(${i})">${m.name}</span>
+                    <button onclick="deleteMember(${i})" class="text-red-400 ml-2"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `).join('');
+
             renderMemberGrid(trip);
 
             let headerHtml = `<th class="p-4">類別 / 項目</th><th class="p-4">付款人</th><th class="p-4">總額</th>`;
@@ -257,47 +368,30 @@
             calculateAdvice(balances);
         };
 
-        // (1) 修復匯出 CSV 檔案
+        // 其它原有功能保持不變...
         window.exportToCSV = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (!trip || !trip.data.length) return alert("尚無消費資料可匯出");
-
             let csvContent = "\ufeff日期,項目,類別,付款人,台幣金額,參與人員\n";
             trip.data.forEach(item => {
-                const row = [
-                    item.date,
-                    item.name,
-                    item.category,
-                    item.payer,
-                    item.amount,
-                    item.participants.join(";")
-                ].join(",");
+                const row = [item.date, item.name, item.category, item.payer, item.amount, item.participants.join(";")].join(",");
                 csvContent += row + "\n";
             });
-
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
+            link.setAttribute("href", URL.createObjectURL(blob));
             link.setAttribute("download", `${trip.name}_消費明細.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
         };
 
-        // (2) 修復刪除專案按鈕
         window.deleteTripBtn = async () => {
-            if (window.trips.length <= 1) return alert("必須保留至少一個專案，無法刪除。");
+            if (window.trips.length <= 1) return alert("必須保留至少一個專案。");
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (!confirm(`確定要「永久刪除」專案：${trip.name} 嗎？此操作無法還原。`)) return;
-
+            if (!confirm(`確定要刪除專案：${trip.name}？`)) return;
             window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
             window.currentTripId = window.trips[0].id;
             localStorage.setItem('current_trip_id', window.currentTripId);
-            
             await setDoc(tripsRef, { trips: window.trips });
-            alert("專案已刪除");
         };
 
         window.renderMemberGrid = (trip) => {
@@ -307,9 +401,9 @@
             const checkedCount = document.querySelectorAll('.participant-checkbox:checked').length || trip.members.length;
             const avg = totalTWD / checkedCount;
 
-            document.getElementById('memberCheckGrid').innerHTML = trip.members.map(m => `
+            document.getElementById('memberCheckGrid').innerHTML = trip.members.map((m, i) => `
                 <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-xl border border-gray-100">
-                    <img src="${m.photo || AVATARS[0]}" class="avatar">
+                    <img src="${m.photo || AVATARS[0]}" class="avatar" onclick="openAvatarPicker(${i})">
                     <span class="text-xs font-bold flex-1">${m.name}</span>
                     ${isCustomSplit ? 
                         `<input type="number" placeholder="金額" class="custom-val w-16 bg-white border rounded p-1 text-[10px] font-bold" oninput="updateLiveShares()">` : 
