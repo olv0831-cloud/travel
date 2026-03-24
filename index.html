@@ -10,7 +10,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; --radius: 1.5rem; }
-        /* (1) 移除斜體 */
         body { background-color: var(--bg-color); color: #1e293b; font-family: sans-serif; transition: all 0.3s ease; }
         .card { background-color: var(--card-bg); border-radius: var(--radius); padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid transparent; }
         .sticky-header { position: sticky; top: 0; z-index: 50; }
@@ -19,19 +18,14 @@
         .expanded { max-height: 800px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #334155; }
         
-        /* (6) 風格裝飾增強 */
         .theme-spring { --primary-color: #10b981; --bg-color: #f0fdf4; --radius: 0.5rem; }
         .theme-spring .card { border: 2px solid #10b981; box-shadow: 6px 6px 0px #d1fae5; }
-        
         .theme-summer { --primary-color: #f59e0b; --bg-color: #fffbeb; --radius: 3rem 1rem; }
         .theme-summer .card { border: 2px dashed #fcd34d; }
-        
         .theme-autumn { --primary-color: #ef4444; --bg-color: #fef2f2; }
         .theme-autumn .card { border-left: 8px solid #ef4444; border-radius: 0; }
-        
         .theme-winter { --primary-color: #6366f1; --bg-color: #f5f3ff; }
         .theme-winter .card { backdrop-filter: blur(10px); background: rgba(255,255,255,0.7); border: 1px solid #e0e7ff; }
-
         .theme-classic { --primary-color: #3b82f6; --bg-color: #f8fafc; }
 
         @media print { .no-print { display: none !important; } }
@@ -59,21 +53,24 @@
                 </p>
             </div>
             <div class="flex items-center gap-4">
-                <div class="hidden md:flex gap-2 mr-4">
+                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/30 transition-colors">工具與風格歷史 (A)</button>
+            </div>
+        </div>
+        <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
+            <div class="bg-white/10 p-4 rounded-2xl flex flex-wrap items-center gap-6">
+                <div class="flex gap-3 items-center border-r border-white/10 pr-6">
+                    <span class="text-[10px] font-bold text-white/40 uppercase">切換風格</span>
                     <button onclick="changeTheme('classic')" class="w-6 h-6 rounded-full bg-blue-500 border-2 border-white" title="經典"></button>
                     <button onclick="changeTheme('spring')" class="w-6 h-6 rounded-full bg-emerald-500" title="春分"></button>
                     <button onclick="changeTheme('summer')" class="w-6 h-6 rounded-full bg-amber-400" title="盛夏"></button>
                     <button onclick="changeTheme('autumn')" class="w-6 h-6 rounded-full bg-red-500" title="楓秋"></button>
                     <button onclick="changeTheme('winter')" class="w-6 h-6 rounded-full bg-indigo-500" title="冬雪"></button>
                 </div>
-                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20">工具與歷史</button>
-            </div>
-        </div>
-        <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
-            <div class="bg-white/10 p-4 rounded-2xl flex flex-wrap gap-3">
-                <button onclick="exportToCSV()" class="bg-green-600 px-4 py-1.5 rounded-lg text-xs font-bold">匯出 CSV</button>
-                <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold">列印報表</button>
-                <button onclick="deleteTripBtn()" class="bg-red-500/80 px-4 py-1.5 rounded-lg text-xs font-bold">刪除專案</button>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="exportToCSV()" class="bg-green-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-green-500">匯出 CSV</button>
+                    <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-500">列印報表</button>
+                    <button onclick="deleteTripBtn()" class="bg-red-500/80 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-600">刪除專案</button>
+                </div>
             </div>
             <div class="bg-white/5 rounded-2xl overflow-hidden">
                 <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
@@ -86,7 +83,6 @@
         <div class="lg:col-span-1 space-y-6 no-print">
             <div class="card border-t-4 border-blue-500">
                 <h3 class="font-bold mb-4 text-sm"><i class="fa-solid fa-plus mr-2"></i>新增消費</h3>
-                
                 <div class="mb-3">
                     <label class="text-[10px] font-bold text-gray-400">消費類別</label>
                     <select id="category" class="w-full border p-2.5 rounded-xl mt-1 text-sm bg-gray-50">
@@ -95,9 +91,7 @@
                         <option value="交通">🚗 交通</option><option value="其它">📦 其它</option>
                     </select>
                 </div>
-
                 <input id="itemName" type="text" placeholder="項目名稱" class="w-full border p-3 rounded-xl mb-3 text-sm outline-none">
-                
                 <div class="mb-3">
                     <div class="flex border rounded-xl overflow-hidden">
                         <select id="currency" onchange="checkNewCurrency(this)" class="bg-gray-50 px-3 text-xs font-bold border-r">
@@ -109,12 +103,10 @@
                     </div>
                     <p id="rateDisplay" class="text-[9px] text-gray-400 mt-1 ml-1 font-bold">目前匯率: 1.00</p>
                 </div>
-
                 <div class="mb-4">
                     <label class="text-[10px] font-bold text-gray-400">付款人</label>
                     <select id="payer" class="w-full border p-2.5 rounded-xl mt-1 font-bold text-sm"></select>
                 </div>
-
                 <div class="mb-6">
                     <div class="flex justify-between items-center mb-2">
                         <label class="text-[10px] font-bold text-gray-400">參與人員 (勾選)</label>
@@ -123,11 +115,6 @@
                     <div id="memberCheckGrid" class="grid grid-cols-1 gap-2"></div>
                 </div>
                 <button onclick="addRow()" class="w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95" style="background-color: var(--primary-color);">加入清單</button>
-            </div>
-
-            <div class="card">
-                <h3 class="font-bold mb-4 text-sm">💰 個人收支統計</h3>
-                <div id="balanceSummaryList" class="space-y-3"></div>
             </div>
         </div>
 
@@ -143,7 +130,7 @@
                         <canvas id="expenseChart"></canvas>
                     </div>
                 </div>
-                </div>
+            </div>
 
             <div class="card p-0 overflow-hidden">
                 <div class="overflow-x-auto">
@@ -154,6 +141,11 @@
                         <tbody id="expenseList" class="text-xs divide-y"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="card">
+                <h3 class="font-bold mb-4 text-sm">💰 個人收支統計</h3>
+                <div id="balanceSummaryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
 
             <div class="card border-2 border-dashed border-blue-200 bg-blue-50/30">
@@ -176,7 +168,7 @@
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
         let chartInstance = null;
-        let isCustomSplit = false; // (10)
+        let isCustomSplit = false;
 
         const fmt = (num) => Math.round(num).toLocaleString('en-US');
 
@@ -198,7 +190,6 @@
             if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             
-            // (5) (10) 參與人名單與手動金額
             renderMemberGrid(trip);
 
             let headerHtml = `<th class="p-4">類別 / 項目</th><th class="p-4">付款人</th><th class="p-4">總額</th>`;
@@ -207,9 +198,9 @@
             document.getElementById('dynamicHeader').innerHTML = headerHtml;
 
             let totalTWD = 0; 
-            let balances = {}; // 差額
-            let paidSum = {}; // (9) 代付
-            let oweSum = {}; // (9) 應付
+            let balances = {};
+            let paidSum = {};
+            let oweSum = {};
             let catStats = { '餐飲':0, '購物':0, '娛樂':0, '住宿':0, '交通':0, '其它':0 };
             trip.members.forEach(m => { balances[m.name] = 0; paidSum[m.name] = 0; oweSum[m.name] = 0; });
 
@@ -244,7 +235,6 @@
 
             document.getElementById('totalSpent').innerText = `$${fmt(totalTWD)}`;
             
-            // (9) 代付與需付統計
             document.getElementById('balanceSummaryList').innerHTML = trip.members.map(m => `
                 <div class="bg-gray-50 p-3 rounded-2xl border border-gray-100">
                     <div class="flex justify-between items-center mb-1">
@@ -257,7 +247,6 @@
                     </div>
                 </div>`).join('');
 
-            // (7) 歷史紀錄修正：確保顯示操作
             document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `
                 <div class="history-item">
                     <span><b>${h.time}</b> - ${h.action}</span>
@@ -268,11 +257,53 @@
             calculateAdvice(balances);
         };
 
-        function renderMemberGrid(trip) {
+        // (1) 修復匯出 CSV 檔案
+        window.exportToCSV = () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (!trip || !trip.data.length) return alert("尚無消費資料可匯出");
+
+            let csvContent = "\ufeff日期,項目,類別,付款人,台幣金額,參與人員\n";
+            trip.data.forEach(item => {
+                const row = [
+                    item.date,
+                    item.name,
+                    item.category,
+                    item.payer,
+                    item.amount,
+                    item.participants.join(";")
+                ].join(",");
+                csvContent += row + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${trip.name}_消費明細.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // (2) 修復刪除專案按鈕
+        window.deleteTripBtn = async () => {
+            if (window.trips.length <= 1) return alert("必須保留至少一個專案，無法刪除。");
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (!confirm(`確定要「永久刪除」專案：${trip.name} 嗎？此操作無法還原。`)) return;
+
+            window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
+            window.currentTripId = window.trips[0].id;
+            localStorage.setItem('current_trip_id', window.currentTripId);
+            
+            await setDoc(tripsRef, { trips: window.trips });
+            alert("專案已刪除");
+        };
+
+        window.renderMemberGrid = (trip) => {
             const amount = parseFloat(document.getElementById('amount').value) || 0;
             const rate = parseFloat(document.getElementById('currency').options[document.getElementById('currency').selectedIndex]?.dataset.rate) || 1;
             const totalTWD = amount * rate;
-            
             const checkedCount = document.querySelectorAll('.participant-checkbox:checked').length || trip.members.length;
             const avg = totalTWD / checkedCount;
 
@@ -286,12 +317,10 @@
                     }
                     <input type="checkbox" value="${m.name}" checked class="participant-checkbox w-4 h-4" onchange="updateLiveShares()">
                 </div>`).join('');
-        }
+        };
 
-        // (5) 即時更新每人分多少
         window.updateLiveShares = () => {
             if (isCustomSplit) return;
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const amount = parseFloat(document.getElementById('amount').value) || 0;
             const rate = parseFloat(document.getElementById('currency').options[document.getElementById('currency').selectedIndex]?.dataset.rate) || 1;
             const totalTWD = amount * rate;
@@ -300,7 +329,6 @@
             document.querySelectorAll('.individual-share').forEach(el => el.innerText = `~$${fmt(avg)}`);
         };
 
-        // (3) (4) 外幣處理
         window.checkNewCurrency = (el) => {
             if (el.value === 'NEW') {
                 const n = prompt("輸入外幣名稱 (如: USD):");
@@ -316,19 +344,16 @@
             updateLiveShares();
         };
 
-        // (6) 風格切換
         window.changeTheme = (t) => {
             document.body.className = `min-h-screen theme-${t}`;
             localStorage.setItem('user-theme', t);
         };
 
-        // (8) 原餅圖插件配置
         Chart.register(ChartDataLabels);
         function updateChart(stats) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
             const data = Object.values(stats).filter(v => v > 0);
             const labels = Object.keys(stats).filter(k => stats[k] > 0);
-            
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(ctx, {
                 type: 'doughnut',
@@ -348,9 +373,7 @@
                         datalabels: {
                             color: '#fff',
                             font: { weight: 'bold', size: 10 },
-                            formatter: (value, ctx) => {
-                                return ctx.chart.data.labels[ctx.dataIndex] + '\n$' + fmt(value);
-                            },
+                            formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex] + '\n$' + fmt(value),
                             display: true
                         }
                     },
@@ -391,7 +414,6 @@
 
             if (parts.length === 0) return alert("請至少選擇一位參與者");
 
-            // 保存歷史
             if (!trip.history) trip.history = [];
             trip.history.unshift({ 
                 time: new Date().toLocaleTimeString(), 
@@ -412,7 +434,6 @@
             await setDoc(tripsRef, { trips: window.trips });
             document.getElementById('itemName').value = ''; 
             document.getElementById('amount').value = '';
-            document.querySelectorAll('.custom-val').forEach(i => i.value = '');
         };
 
         window.toggleSplitMode = () => {
@@ -463,8 +484,6 @@
 
         window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
         window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
-
-        // 初始化金額監聽
         document.getElementById('amount').addEventListener('input', updateLiveShares);
     </script>
 </body>
