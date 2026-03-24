@@ -11,6 +11,10 @@
         .active-tab { border-bottom: 4px solid #3b82f6; color: #3b82f6; background: #eff6ff; font-weight: bold; }
         .tab { transition: all 0.3s; cursor: pointer; padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 4px; }
         .member-col { min-width: 80px; text-align: center; border-left: 1px solid #f1f5f9; }
+        /* 修正紅框突出的問題 */
+        .input-group { display: flex; overflow: hidden; border-radius: 0.75rem; border: 1px solid #e2e8f0; background: #f9fafb; }
+        .input-group select { border: none; background: #f1f5f9; border-right: 1px solid #e2e8f0; outline: none; padding: 0 10px; width: 85px; }
+        .input-group input { border: none; background: transparent; outline: none; flex: 1; padding: 12px; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -45,16 +49,17 @@
 
             <div class="bg-white p-6 rounded-2xl shadow-sm border">
                 <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-cart-plus text-orange-500"></i>新增消費</h3>
-                <input id="itemName" type="text" placeholder="項目 (如：藥妝、晚餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none">
+                <input id="itemName" type="text" placeholder="項目 (如：飯店、晚餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none">
                 
-                <div class="flex gap-2 mb-3">
-                    <select id="currency" class="w-20 border p-3 rounded-xl bg-gray-50 text-xs font-bold focus:ring-2 focus:ring-blue-400">
+                <div class="input-group mb-3">
+                    <select id="currency" class="text-xs font-bold" onchange="checkNewCurrency(this)">
                         <option value="TWD">TWD</option>
                         <option value="JPY">JPY</option>
                         <option value="USD">USD</option>
                         <option value="KRW">KRW</option>
+                        <option value="ADD">+ 新增幣別</option>
                     </select>
-                    <input id="amount" type="number" placeholder="金額" class="flex-1 border p-3 rounded-xl bg-gray-50 font-bold focus:ring-2 focus:ring-blue-400 outline-none">
+                    <input id="amount" type="number" placeholder="金額" class="font-bold">
                 </div>
 
                 <div class="bg-blue-50 p-3 rounded-xl mb-3">
@@ -91,7 +96,7 @@
             </div>
 
             <div class="bg-white rounded-2xl border shadow-sm overflow-hidden overflow-x-auto">
-                <table class="w-full text-left min-w-[800px]">
+                <table class="w-full text-left min-w-[900px]">
                     <thead id="dynamicHeader" class="bg-gray-50 text-gray-500 text-[10px] uppercase font-black border-b"></thead>
                     <tbody id="expenseList" class="text-gray-700 text-sm"></tbody>
                 </table>
@@ -119,39 +124,40 @@
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
 
-        // Firebase 監聽
         onSnapshot(tripsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                window.trips = docSnap.data().trips || [];
-            } else {
-                window.trips = [{ id: Date.now(), name: '台南美食之旅', members: ['Paul', 'Mia', 'Vivien'], data: [] }];
-                setDoc(tripsRef, { trips: window.trips });
-            }
+            if (docSnap.exists()) window.trips = docSnap.data().trips || [];
             if (!window.currentTripId && window.trips.length > 0) window.currentTripId = window.trips[0].id;
             refreshAll();
         });
 
         async function sync() { await setDoc(tripsRef, { trips: window.trips }); }
 
-        // --- 核心功能：換匯引擎 ---
-        async function convertToTWD(amount, fromCurrency) {
-            if (fromCurrency === 'TWD') return amount;
+        // (3) 動態幣別處理
+        window.checkNewCurrency = (select) => {
+            if (select.value === 'ADD') {
+                const newCur = prompt("請輸入幣別代碼 (例如: EUR, HKD):")?.toUpperCase();
+                if (newCur && newCur.length === 3) {
+                    const option = document.createElement("option");
+                    option.value = newCur; option.text = newCur;
+                    select.add(option, select.options[select.options.length - 1]);
+                    select.value = newCur;
+                } else { select.value = 'TWD'; }
+            }
+        };
+
+        // (2) 換匯與日期記錄
+        async function fetchExchangeData(fromCurrency) {
+            if (fromCurrency === 'TWD') return { rate: 1, date: new Date().toLocaleDateString() };
             try {
                 const res = await fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`);
                 const data = await res.json();
-                const rate = data.rates['TWD'];
-                return amount * rate;
-            } catch (e) {
-                alert("無法取得即時匯率，請手動換算");
-                return amount;
-            }
+                return { rate: data.rates['TWD'], date: new Date().toLocaleDateString() };
+            } catch (e) { return { rate: null, date: null }; }
         }
 
-        // --- 核心功能：新增消費 ---
         window.addRow = async () => {
             const btn = document.getElementById('addBtn');
-            btn.disabled = true;
-            btn.innerText = "換算並儲存中...";
+            btn.disabled = true; btn.innerText = "換算中...";
 
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const name = document.getElementById('itemName').value;
@@ -160,14 +166,13 @@
             const rawAmount = parseFloat(document.getElementById('amount').value);
             
             if (!name || !payer || isNaN(rawAmount)) {
-                alert("請填寫完整資訊！");
-                btn.disabled = false;
-                btn.innerText = "加入帳目清單";
-                return;
+                alert("資訊不完整！"); btn.disabled = false; btn.innerText = "加入帳目清單"; return;
             }
 
-            // 自動換匯
-            const amountInTWD = Math.round(await convertToTWD(rawAmount, currency));
+            const exchange = await fetchExchangeData(currency);
+            if (!exchange.rate) { alert("匯率抓取失敗"); btn.disabled = false; return; }
+
+            const amountInTWD = Math.round(rawAmount * exchange.rate);
             const participants = [];
             let totalCustom = 0;
 
@@ -175,96 +180,59 @@
                 const cb = row.querySelector('.participant-checkbox');
                 const customInput = row.querySelector('.custom-amount');
                 if (cb.checked) {
-                    const customVal = parseFloat(customInput.value) || 0;
-                    participants.push({ name: cb.value, customAmount: customVal > 0 ? customVal : null });
-                    totalCustom += customVal;
+                    const val = parseFloat(customInput.value) || 0;
+                    participants.push({ name: cb.value, customAmount: val > 0 ? val : null });
+                    totalCustom += val;
                 }
             });
 
-            if (participants.length === 0) {
-                alert("請至少選擇一位分帳成員！");
-                btn.disabled = false; btn.innerText = "加入帳目清單";
-                return;
-            }
-
-            const customCount = participants.filter(p => p.customAmount !== null).length;
             const remaining = amountInTWD - totalCustom;
-            const splitCount = participants.length - customCount;
+            const splitCount = participants.length - participants.filter(p => p.customAmount !== null).length;
             const avg = splitCount > 0 ? remaining / splitCount : 0;
-            
-            participants.forEach(p => { 
-                p.finalShare = p.customAmount !== null ? p.customAmount : avg; 
-            });
+            participants.forEach(p => { p.finalShare = p.customAmount !== null ? p.customAmount : avg; });
 
             trip.data.push({
                 id: Date.now(),
                 name: `${name} (${rawAmount}${currency})`,
                 payer,
                 amount: amountInTWD,
-                participants
+                participants,
+                rateInfo: currency !== 'TWD' ? `@${exchange.rate.toFixed(4)} (${exchange.date})` : ""
             });
 
-            document.getElementById('itemName').value = '';
-            document.getElementById('amount').value = '';
+            document.getElementById('itemName').value = ''; document.getElementById('amount').value = '';
             await sync();
-            btn.disabled = false;
-            btn.innerText = "加入帳目清單";
+            btn.disabled = false; btn.innerText = "加入帳目清單";
         };
 
-        // --- 核心功能：最省事結算算法 ---
-        function calculateSettlement(balances, members) {
-            let debt = []; // 欠錢的 (負值)
-            let credit = []; // 收錢的 (正值)
-            members.forEach(m => {
-                if (balances[m] > 1) credit.push({ name: m, amount: balances[m] });
-                else if (balances[m] < -1) debt.push({ name: m, amount: -balances[m] });
-            });
-
-            let suggestions = [];
-            let d = 0, c = 0;
-            while (d < debt.length && c < credit.length) {
-                let settle = Math.min(debt[d].amount, credit[c].amount);
-                suggestions.push(`<b>${debt[d].name}</b> ➡ <b>${credit[c].name}</b> <br>支付 <span class="text-blue-600 font-bold">$${Math.round(settle)}</span>`);
-                debt[d].amount -= settle;
-                credit[c].amount -= settle;
-                if (debt[d].amount < 1) d++;
-                if (credit[c].amount < 1) c++;
-            }
-            return suggestions.length > 0 ? suggestions : ["已全部結清 ✨"];
-        }
-
-        // --- 介面刷新 ---
         function refreshAll() {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)) || window.trips[0];
             if (!trip) return;
 
             document.getElementById('tripTitle').innerText = trip.name;
             document.getElementById('tripTabs').innerHTML = window.trips.map(t => `
-                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400 hover:bg-gray-100'} group">
+                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab shadow-sm' : 'text-gray-400'} group">
                     <span>${t.name}</span>
-                    <i onclick="deleteTrip(event, ${t.id})" class="fa-solid fa-times-circle opacity-0 group-hover:opacity-100 transition hover:text-red-500"></i>
                 </div>`).join('');
 
             document.getElementById('memberList').innerHTML = trip.members.map(m => `
-                <span class="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 flex items-center gap-1">
-                    ${m} <i onclick="removeMember('${m}')" class="fa-solid fa-times cursor-pointer hover:text-red-500"></i>
-                </span>`).join('');
+                <span class="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 flex items-center gap-1">${m}</span>`).join('');
 
             document.getElementById('participantChecks').innerHTML = trip.members.map(m => `
-                <div class="participant-row flex items-center justify-between bg-gray-50 p-2 rounded-xl border border-transparent hover:border-blue-200 transition">
+                <div class="participant-row flex items-center justify-between bg-gray-50 p-2 rounded-xl border border-transparent">
                     <label class="flex items-center space-x-2 flex-1 cursor-pointer">
-                        <input type="checkbox" value="${m}" checked class="participant-checkbox w-4 h-4 rounded text-blue-600 focus:ring-blue-500">
+                        <input type="checkbox" value="${m}" checked class="participant-checkbox w-4 h-4 rounded text-blue-600">
                         <span class="text-xs font-bold text-slate-700">${m}</span>
                     </label>
-                    <input type="number" placeholder="固定$" class="custom-amount w-16 text-right text-[10px] bg-white border rounded p-1 focus:ring-1 focus:ring-blue-400 outline-none">
+                    <input type="number" placeholder="固定$" class="custom-amount w-16 text-right text-[10px] bg-white border rounded p-1">
                 </div>`).join('');
 
-            document.getElementById('payer').innerHTML = '<option value="" disabled selected>是誰付錢的？</option>' + 
-                trip.members.map(m => `<option value="${m}">${m}</option>`).join('');
+            document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m}">${m}</option>`).join('');
             
-            document.getElementById('dynamicHeader').innerHTML = `<tr><th class="p-4">項目/備註</th><th class="p-4">付款</th>` + 
+            // (2) 列表新增匯率資訊欄 (藍框處)
+            document.getElementById('dynamicHeader').innerHTML = `<tr><th class="p-4">項目/備註</th><th class="p-4">匯率/日期</th><th class="p-4">付款</th>` + 
                 trip.members.map(m => `<th class="p-4 member-col">${m}</th>`).join('') + 
-                `<th class="p-4 text-right">總金額(T)</th><th class="p-4 text-center">刪</th></tr>`;
+                `<th class="p-4 text-right">總額(TWD)</th><th class="p-4 text-center">刪</th></tr>`;
 
             let totalSpent = 0; let balances = {}; trip.members.forEach(m => balances[m] = 0);
             
@@ -275,73 +243,54 @@
                     const p = item.participants.find(part => part.name === m);
                     if (p) {
                         balances[m] -= p.finalShare;
-                        return `<td class="p-4 member-col text-[10px] text-blue-600 font-bold bg-blue-50/30">✔️<br>$${Math.round(p.finalShare)}</td>`;
+                        return `<td class="p-4 member-col text-[10px] text-blue-600 font-bold bg-blue-50/30">✔️ $${Math.round(p.finalShare)}</td>`;
                     }
-                    return `<td class="p-4 member-col text-gray-200 text-xs">-</td>`;
+                    return `<td class="p-4 member-col text-gray-200">-</td>`;
                 }).join('');
-                return `<tr class="border-b hover:bg-gray-50/50"><td class="p-4 font-bold text-slate-800">${item.name}</td><td class="p-4 text-slate-500 font-medium">${item.payer}</td>${cells}<td class="p-4 text-right font-black text-slate-900">$${item.amount.toLocaleString()}</td><td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 hover:text-red-500 cursor-pointer transition"></i></td></tr>`;
+                return `<tr class="border-b hover:bg-gray-50/50">
+                    <td class="p-4 font-bold text-slate-800">${item.name}</td>
+                    <td class="p-4 text-[10px] text-gray-400 italic">${item.rateInfo || "-"}</td>
+                    <td class="p-4 text-slate-500 font-medium">${item.payer}</td>
+                    ${cells}
+                    <td class="p-4 text-right font-black text-slate-900">$${item.amount.toLocaleString()}</td>
+                    <td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 hover:text-red-500 cursor-pointer transition"></i></td>
+                </tr>`;
             }).join('');
             
             document.getElementById('totalSpent').innerText = `$${Math.round(totalSpent).toLocaleString()}`;
             document.getElementById('balanceList').innerHTML = trip.members.map(m => { 
                 const b = Math.round(balances[m]); 
                 return `<div class="flex justify-between p-2 rounded-xl ${b>=0?'bg-green-50 text-green-700':'bg-red-50 text-red-700'}">
-                    <span class="font-bold">${m}</span>
-                    <span class="font-black">${b>=0?'+':''}${b}</span>
-                </div>`; 
+                    <span class="font-bold">${m}</span><span class="font-black">${b>=0?'+':''}${b}</span></div>`; 
             }).join('');
 
-            // 更新轉帳建議
             const suggestions = calculateSettlement({...balances}, trip.members);
             document.getElementById('settlementAdvice').innerHTML = suggestions.map(s => `
-                <div class="p-3 bg-white border border-green-100 rounded-xl shadow-sm leading-relaxed">${s}</div>`).join('');
+                <div class="p-3 bg-white border border-green-100 rounded-xl shadow-sm">${s}</div>`).join('');
         }
 
-        // --- 其他輔助功能 ---
+        function calculateSettlement(balances, members) {
+            let debt = [], credit = [];
+            members.forEach(m => {
+                if (balances[m] > 1) credit.push({ name: m, amount: balances[m] });
+                else if (balances[m] < -1) debt.push({ name: m, amount: -balances[m] });
+            });
+            let res = []; let d = 0, c = 0;
+            while (d < debt.length && c < credit.length) {
+                let settle = Math.min(debt[d].amount, credit[c].amount);
+                res.push(`<b>${debt[d].name}</b> ➡ <b>${credit[c].name}</b>: $${Math.round(settle)}`);
+                debt[d].amount -= settle; credit[c].amount -= settle;
+                if (debt[d].amount < 1) d++; if (credit[c].amount < 1) c++;
+            }
+            return res.length > 0 ? res : ["已結清"];
+        }
+
         window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.updateTripName = async () => { 
-            const el = document.getElementById('tripTitle'); const newName = el.innerText.trim();
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip && newName && trip.name !== newName && newName !== "載入中...") { trip.name = newName; await sync(); }
-        };
-        window.addMember = async () => { 
-            const name = document.getElementById('newMemberName').value.trim();
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (name && !trip.members.includes(name)) { trip.members.push(name); document.getElementById('newMemberName').value = ''; await sync(); }
-        };
-        window.removeMember = async (name) => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (confirm(`確定移除 ${name}？這可能會影響舊帳目的顯示`)) { trip.members = trip.members.filter(m => m !== name); await sync(); }
-        };
         window.deleteExpense = async (id) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (confirm("刪除這筆帳目？")) { trip.data = trip.data.filter(i => i.id !== id); await sync(); }
-        };
-        window.createNewTrip = async () => {
-            const name = prompt('請輸入新計畫名稱：', '東京之旅');
-            if (name) {
-                const newTrip = { id: Date.now(), name, members: ['Paul'], data: [] };
-                window.trips.push(newTrip); window.currentTripId = newTrip.id; await sync();
-            }
+            if (confirm("刪除此筆？")) { trip.data = trip.data.filter(i => i.id !== id); await sync(); }
         };
         window.toggleAllParticipants = (src) => { document.querySelectorAll('.participant-checkbox').forEach(cb => cb.checked = src.checked); };
-        window.exportToCSV = () => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            let csv = "\uFEFF項目,付款人,總額(TWD)," + trip.members.join(",") + "\n";
-            trip.data.forEach(i => {
-                let row = `${i.name},${i.payer},${i.amount}`;
-                trip.members.forEach(m => {
-                    const p = i.participants.find(part => part.name === m);
-                    row += p ? `,${Math.round(p.finalShare)}` : ",0";
-                });
-                csv += row + "\n";
-            });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `${trip.name}_分帳報表.csv`;
-            link.click();
-        };
     </script>
 </body>
 </html>
