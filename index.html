@@ -1,351 +1,248 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paul的分帳神器</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style id="dynamic-theme">
-        :root { --primary: #3b82f6; --bg: #f8fafc; --card-radius: 1.5rem; }
-        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background-color: var(--bg); transition: all 0.3s ease; }
-        .card { background: white; border-radius: var(--card-radius); transition: all 0.3s ease; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }
-        /* 活潑風格深層定義 */
-        .theme-spring { --primary: #10b981; --bg: #f0fdf4; }
-        .theme-spring .card { border: 2px solid #d1fae5; box-shadow: 6px 6px 0px #10b981; }
-        .theme-summer { --primary: #f59e0b; --bg: #fffbeb; }
-        .theme-summer .card { border-radius: 40px 10px 40px 10px; border: 2px solid #fde68a; }
-        .theme-autumn { --primary: #ef4444; --bg: #fff1f2; }
-        .theme-autumn .card { border-bottom: 6px solid #ef4444; }
-        .theme-winter { --primary: #6366f1; --bg: #eef2ff; }
-        .theme-winter .card { border: 1px solid #e0e7ff; backdrop-filter: blur(10px); background: rgba(255,255,255,0.8); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分帳神器</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<style>
+:root { --primary:#3b82f6; --bg:#f8fafc; }
+body { font-family:"PingFang TC"; background:var(--bg); }
+
+/* 共用 */
+.card { background:#fff; border-radius:20px; transition:.4s; }
+.card:hover { transform:translateY(-3px) scale(1.01); }
+
+/* 主題 */
+.theme-spring .card { border:3px dashed #34d399; transform:rotate(-1deg); }
+.theme-summer .card { box-shadow:0 10px 0 #fcd34d; border-radius:30px; }
+.theme-autumn .card { border-left:8px solid #ef4444; border-radius:0; }
+.theme-winter .card { backdrop-filter:blur(20px); background:rgba(255,255,255,.7); }
+</style>
 </head>
+
 <body class="pb-20">
 
-    <nav class="p-4 flex justify-between items-center bg-white border-b sticky top-0 z-50">
-        <div class="font-black text-blue-600 text-xl tracking-tighter">Paul的分帳神器</div>
-        <div class="flex items-center gap-2">
-            <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 rounded-xl px-4 py-2 text-sm font-bold"></select>
-            <button onclick="createNewTrip()" class="text-blue-600 text-2xl"><i class="fa-solid fa-circle-plus"></i></button>
-        </div>
-    </nav>
+<!-- NAV -->
+<nav class="p-4 flex justify-between items-center bg-white shadow">
+<input id="tripTitle"
+    class="text-xl font-black bg-transparent border-b border-transparent focus:border-blue-500 outline-none"
+    onblur="saveTripName(this.value)"
+    value="載入中..."/>
+</nav>
 
-    <header class="bg-[#1a202c] text-white p-8">
-        <div class="max-w-7xl mx-auto flex justify-between items-start">
-            <div>
-                <h1 id="tripTitle" onclick="renameTrip()" class="text-4xl font-black cursor-pointer hover:text-blue-400">載入中...</h1>
-                <p class="text-[11px] text-white/40 mt-2 font-bold uppercase tracking-widest">匯率基準：Google Finance 實時參考 (0.20)</p>
-                
-                <div class="flex gap-3 mt-6">
-                    <button onclick="toggleTools()" class="bg-white/10 hover:bg-white/20 px-5 py-2 rounded-xl text-xs font-bold border border-white/20">工具與歷史</button>
-                    <div id="themeBtns" class="flex gap-2 ml-2 border-l border-white/10 pl-4 items-center">
-                        <button onclick="applyTheme('classic')" class="w-5 h-5 rounded-full bg-blue-500 border-2 border-white"></button>
-                        <button onclick="applyTheme('spring')" class="w-5 h-5 rounded-full bg-emerald-500"></button>
-                        <button onclick="applyTheme('summer')" class="w-5 h-5 rounded-full bg-amber-400"></button>
-                        <button onclick="applyTheme('autumn')" class="w-5 h-5 rounded-full bg-red-500"></button>
-                        <button onclick="applyTheme('winter')" class="w-5 h-5 rounded-full bg-indigo-500"></button>
-                    </div>
-                </div>
-            </div>
+<!-- HEADER -->
+<header class="bg-slate-900 text-white p-6">
+<div class="flex gap-3 overflow-x-auto" id="memberStatsHeader"></div>
+</header>
 
-            <div id="memberStatsHeader" class="flex gap-4 overflow-x-auto max-w-xl pb-2"></div>
-        </div>
+<!-- MAIN -->
+<main class="max-w-6xl mx-auto p-6 grid lg:grid-cols-4 gap-6">
 
-        <div id="toolPanel" class="max-w-7xl mx-auto mt-6 overflow-hidden transition-all duration-300" style="max-height: 0px;">
-            <div class="flex gap-2 mb-4">
-                <button onclick="exportCSV()" class="bg-emerald-600 px-4 py-2 rounded-lg text-xs font-bold">匯出 CSV</button>
-                <button onclick="window.print()" class="bg-sky-600 px-4 py-2 rounded-lg text-xs font-bold">列印報表</button>
-                <button onclick="deleteTrip()" class="bg-rose-500 px-4 py-2 rounded-lg text-xs font-bold">刪除專案</button>
-            </div>
-            <div id="historyList" class="bg-black/20 rounded-2xl p-4 space-y-2 text-xs max-h-40 overflow-y-auto"></div>
-        </div>
-    </header>
+<!-- 左側 -->
+<div class="card p-4">
+<input id="itemName" placeholder="項目" class="w-full mb-2 border p-2 rounded">
 
-    <main class="max-w-7xl mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div class="lg:col-span-3 space-y-6">
-            <div class="card p-6 border border-gray-100">
-                <h3 class="font-black text-xs text-gray-400 mb-4 flex items-center gap-2">
-                    <i class="fa-solid fa-users"></i> 參與分帳人員
-                </h3>
-                <div id="memberList" class="space-y-3 mb-4"></div>
-                <div class="flex gap-2">
-                    <input id="newMemberName" type="text" placeholder="姓名" class="flex-1 bg-gray-50 border-2 p-2 rounded-xl text-sm outline-none">
-                    <button onclick="addMember()" class="bg-slate-800 text-white px-4 rounded-xl font-bold text-xs">新增</button>
-                </div>
-            </div>
+<input id="amount" type="number" placeholder="金額" class="w-full mb-2 border p-2 rounded">
 
-            <div class="card p-6 border border-gray-100">
-                <h3 class="font-black text-xs text-gray-400 mb-6 uppercase flex items-center gap-2">
-                    <i class="fa-solid fa-cart-shopping"></i> 新增消費項目
-                </h3>
-                <div class="space-y-4">
-                    <input id="itemName" type="text" placeholder="項目名稱 (如：飯店、晚餐)" class="w-full border-2 p-3 rounded-2xl text-sm font-bold outline-none focus:border-blue-500">
-                    
-                    <div class="flex border-2 rounded-2xl overflow-hidden focus-within:border-blue-500">
-                        <select id="currency" class="bg-gray-50 px-3 text-[10px] font-black border-r outline-none">
-                            <option value="TWD">TWD</option>
-                            <option value="JPY">JPY</option>
-                        </select>
-                        <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 font-black text-sm outline-none">
-                    </div>
+<select id="payer" class="w-full mb-2 border p-2"></select>
 
-                    <div>
-                        <label class="text-[10px] font-black text-gray-400 ml-1">是誰付錢的？</label>
-                        <select id="payer" class="w-full border-2 p-3 rounded-2xl font-black text-sm mt-1 bg-white"></select>
-                    </div>
+<button onclick="toggleSplitMode()" class="text-blue-500 text-xs mb-2" id="splitModeBtn">
+切換：指定金額
+</button>
 
-                    <div class="bg-gray-50 p-4 rounded-2xl">
-                        <div class="flex justify-between items-center mb-3">
-                            <label class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">參與成員 / 固定金額</label>
-                            <button onclick="toggleSplitMode()" id="splitModeBtn" class="text-blue-600 text-[10px] font-black">切換：指定金額模式</button>
-                        </div>
-                        <div id="participantList" class="space-y-3"></div>
-                    </div>
+<div id="memberCheckGrid"></div>
 
-                    <button onclick="addExpense()" class="w-full py-5 rounded-[1.5rem] text-white font-black text-sm shadow-lg bg-blue-600 hover:bg-blue-700 transition-all">加入帳目清單</button>
-                </div>
-            </div>
-        </div>
+<button onclick="addExpense()" class="w-full bg-blue-500 text-white p-3 mt-3 rounded">
+新增
+</button>
+</div>
 
-        <div class="lg:col-span-9 space-y-8">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-2 card bg-blue-600 text-white p-8 flex items-center justify-between overflow-hidden relative">
-                    <div class="z-10">
-                        <p class="text-blue-200 font-black text-[10px] uppercase">當前專案總支出</p>
-                        <p id="totalSpent" class="text-5xl font-black mt-2 tracking-tighter">$0</p>
-                    </div>
-                    <div class="w-40 h-40 z-10"><canvas id="expenseChart"></canvas></div>
-                </div>
-                <div class="card p-6 border border-gray-100 overflow-y-auto max-h-[220px]">
-                    <h3 class="font-black text-[10px] text-gray-400 mb-4 uppercase flex items-center justify-between">
-                        <span>個人結算 (差額)</span>
-                        <i class="fa-solid fa-scale-balanced"></i>
-                    </h3>
-                    <div id="personalBalanceList" class="space-y-2"></div>
-                </div>
-            </div>
+<!-- 右側 -->
+<div class="lg:col-span-3 space-y-6">
 
-            <div class="card overflow-hidden border border-gray-100 shadow-sm">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="bg-gray-50 text-[10px] font-black text-gray-400 uppercase">
-                            <tr id="dynamicHeader"></tr>
-                        </thead>
-                        <tbody id="expenseList" class="text-[11px] divide-y divide-gray-50"></tbody>
-                    </table>
-                </div>
-            </div>
+<div class="card p-6 bg-slate-800 text-white">
+<div id="totalSpent">$0</div>
+</div>
 
-            <div class="card p-8 bg-gray-50 border-2 border-dashed border-gray-200">
-                <h3 class="font-black text-sm mb-6 flex items-center gap-2">
-                    <i class="fa-solid fa-rocket text-blue-500"></i> 最終轉帳建議 (最省事)
-                </h3>
-                <div id="settlementAdvice" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
-            </div>
-        </div>
-    </main>
+<table class="w-full text-sm">
+<thead id="dynamicHeader"></thead>
+<tbody id="expenseList"></tbody>
+</table>
 
-    <script type="module">
-        // --- 此處為 Firebase 初始化邏輯，嚴格維持現有版本 ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!-- ✅ 轉帳在最底 -->
+<div class="card p-6 border-dashed border">
+<h3>轉帳建議</h3>
+<div id="settlementAdvice"></div>
+</div>
 
-        const firebaseConfig = { apiKey: "AIzaSyCLz4iTnKXkba26S4fRUdV6d0DTZiRXSg0", authDomain: "travel-expense-7dbaa.firebaseapp.com", projectId: "travel-expense-7dbaa", storageBucket: "travel-expense-7dbaa.firebasestorage.app", messagingSenderId: "745263115640", appId: "1:745263115640:web:5714e2c1d041969ecaec8d" };
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const tripsRef = doc(db, "travelData", "master_record");
+</div>
+</main>
 
-        window.trips = [];
-        window.currentTripId = localStorage.getItem('current_trip_id') || "";
-        let isCustomSplit = false;
+<script>
+let trips=[{
+id:1,
+name:"TEST",
+members:[{name:"Paul"},{name:"Mia"},{name:"Vivien"}],
+data:[]
+}];
 
-        onSnapshot(tripsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                window.trips = docSnap.data().trips || [];
-                if (!window.currentTripId && window.trips.length > 0) window.currentTripId = window.trips[0].id;
-                refreshUI();
-            }
-        });
+let currentTripId=1;
+let isCustomSplit=false;
 
-        // 核心：刷新 UI 邏輯
-        window.refreshUI = () => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (!trip) return;
+function refreshAll(){
+let trip=trips[0];
 
-            document.getElementById('tripTitle').innerText = trip.name;
-            document.getElementById('tripDropdown').innerHTML = window.trips.map(t => `<option value="${t.id}" ${String(t.id) === String(window.currentTripId) ? 'selected' : ''}>${t.name}</option>`).join('');
-            
-            // 參與人員與頭像
-            document.getElementById('memberList').innerHTML = trip.members.map(m => `
-                <div class="flex justify-between items-center group">
-                    <div class="flex items-center gap-2">
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${m.name}" class="w-6 h-6 rounded-full bg-gray-100">
-                        <span class="text-sm font-bold text-gray-700">${m.name}</span>
-                    </div>
-                    <button onclick="removeMember('${m.name}')" class="text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all">
-                        <i class="fa-solid fa-xmark text-[10px]"></i>
-                    </button>
-                </div>`).join('');
+document.getElementById('tripTitle').value=trip.name;
 
-            // 付款人選單與參與人核取方塊
-            document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
-            document.getElementById('participantList').innerHTML = trip.members.map(m => `
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" value="${m.name}" checked class="participant-checkbox w-4 h-4 rounded-lg accent-blue-600">
-                    <span class="text-xs font-bold flex-1 text-gray-600">${m.name}</span>
-                    <input type="number" placeholder="固定$" class="custom-amount-input w-16 p-1 text-right text-[10px] border-b outline-none ${isCustomSplit ? '' : 'hidden'}">
-                </div>`).join('');
+document.getElementById('payer').innerHTML=
+trip.members.map(m=>`<option>${m.name}</option>`).join("");
 
-            // 計算結算與統計
-            let total = 0; let bals = {}; let paidSum = {}; let oweSum = {};
-            trip.members.forEach(m => { bals[m.name] = 0; paidSum[m.name] = 0; oweSum[m.name] = 0; });
+document.getElementById('memberCheckGrid').innerHTML=
+trip.members.map(m=>`
+<div class="flex gap-2 items-center">
+<input type="checkbox" checked value="${m.name}">
+<span>${m.name}</span>
+<input class="custom hidden border w-16" placeholder="金額">
+</div>`).join("");
 
-            const listHtml = (trip.data || []).map(item => {
-                total += item.amount;
-                paidSum[item.payer] += item.amount;
-                
-                let memberCells = trip.members.map(m => {
-                    let cost = 0;
-                    if (item.customAmounts && item.customAmounts[m.name] !== undefined) {
-                        cost = item.customAmounts[m.name];
-                    } else if (item.participants.includes(m.name)) {
-                        cost = item.amount / item.participants.length;
-                    }
-                    bals[item.payer] += cost; 
-                    bals[m.name] -= cost;
-                    oweSum[m.name] += cost;
-                    return `<td class="p-4 text-center font-bold ${cost > 0 ? 'text-blue-500' : 'text-gray-200'}">${cost > 0 ? Math.round(cost) : '-'}</td>`;
-                }).join('');
+// header stats
+let paid={}, owe={};
+trip.members.forEach(m=>{paid[m.name]=0;owe[m.name]=0;});
 
-                return `<tr>
-                    <td class="p-4 font-bold text-gray-800">${item.name}<br><span class="text-[9px] text-gray-400">${item.date}</span></td>
-                    <td class="p-4 text-gray-500 font-medium">${item.payer}</td>
-                    <td class="p-4 font-black text-gray-800">$${Math.round(item.amount).toLocaleString()}</td>
-                    ${memberCells}
-                    <td class="p-4 text-center">
-                        <button onclick="deleteRecord(${item.id})" class="text-gray-300 hover:text-rose-500 transition-colors">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                    </td>
-                </tr>`;
-            }).join('');
+trip.data.forEach(d=>{
+paid[d.payer]+=d.amount;
 
-            document.getElementById('expenseList').innerHTML = listHtml;
-            document.getElementById('totalSpent').innerText = `$${Math.round(total).toLocaleString()}`;
+trip.members.forEach(m=>{
+let cost=0;
+if(d.custom && d.custom[m.name]) cost=d.custom[m.name];
+else if(d.part.includes(m.name)) cost=d.amount/d.part.length;
 
-            // (3) 右上角即時統計：代墊與應付
-            document.getElementById('memberStatsHeader').innerHTML = trip.members.map(m => `
-                <div class="bg-white/10 p-3 rounded-2xl min-w-[110px] border border-white/10">
-                    <p class="text-[9px] font-black text-blue-400 uppercase">${m.name}</p>
-                    <div class="flex justify-between mt-1"><span class="text-[8px] opacity-40">代墊:</span><span class="text-[10px] font-bold text-emerald-400">$${Math.round(paidSum[m.name])}</span></div>
-                    <div class="flex justify-between"><span class="text-[8px] opacity-40">應付:</span><span class="text-[10px] font-bold text-rose-400">$${Math.round(oweSum[m.name])}</span></div>
-                </div>`).join('');
+owe[m.name]+=cost;
+});
+});
 
-            // 個人結算差額列表
-            document.getElementById('personalBalanceList').innerHTML = trip.members.map(m => {
-                const diff = bals[m.name] + paidSum[m.name] - oweSum[m.name]; // 簡化後的餘額顯示邏輯
-                const color = bals[m.name] >= 0 ? 'text-emerald-500' : 'text-rose-500';
-                return `<div class="flex justify-between text-[11px] font-bold">
-                    <span class="text-gray-500">${m.name}</span>
-                    <span class="${color}">${bals[m.name] >= 0 ? '+' : ''}${Math.round(bals[m.name])}</span>
-                </div>`;
-            }).join('');
+document.getElementById('memberStatsHeader').innerHTML=
+trip.members.map(m=>{
+let net=paid[m.name]-owe[m.name];
+return `
+<div class="bg-white/10 p-3 rounded">
+<div>${m.name}</div>
+<div>代墊 $${paid[m.name]}</div>
+<div>應付 $${owe[m.name]}</div>
+<div class="${net>=0?'text-green-400':'text-red-400'}">
+淨額 $${net}
+</div>
+</div>`;
+}).join("");
 
-            calcSettlement(bals);
-            updateHeader(trip.members);
-        };
+// table
+document.getElementById('expenseList').innerHTML=
+trip.data.map(d=>`
+<tr>
+<td>${d.name}</td>
+<td>${d.payer}</td>
+<td>$${d.amount}</td>
+</tr>`).join("");
 
-        // (1) 修改專案名稱
-        window.renameTrip = async () => {
-            const newName = prompt("請輸入新的專案名稱：");
-            if (newName) {
-                const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-                trip.name = newName;
-                await setDoc(tripsRef, { trips: window.trips });
-            }
-        };
+calcSettlement();
+}
 
-        // (2) 指定金額模式切換
-        window.toggleSplitMode = () => {
-            isCustomSplit = !isCustomSplit;
-            document.getElementById('splitModeBtn').innerText = isCustomSplit ? "切換：平均分攤模式" : "切換：指定金額模式";
-            refreshUI();
-        };
+function saveTripName(v){
+trips[0].name=v;
+}
 
-        // (5) 深層風格樣式切換
-        window.applyTheme = (t) => {
-            document.body.className = t === 'classic' ? 'pb-20' : `pb-20 theme-${t}`;
-        };
+function toggleSplitMode(){
+isCustomSplit=!isCustomSplit;
+document.querySelectorAll('.custom').forEach(el=>{
+el.classList.toggle('hidden');
+});
+}
 
-        window.addExpense = async () => {
-            const n = document.getElementById('itemName').value;
-            const a = parseFloat(document.getElementById('amount').value);
-            if (!n || isNaN(a)) return alert("請填寫正確資料");
+function addExpense(){
+let name=itemName.value;
+let amount=parseFloat(amountInput.value);
 
-            const trip = window.trips.find(x => String(x.id) === String(window.currentTripId));
-            let customSplitData = null;
-            if (isCustomSplit) {
-                customSplitData = {};
-                const inputs = document.querySelectorAll('.custom-amount-input');
-                inputs.forEach((inp, idx) => { if(inp.value) customSplitData[trip.members[idx].name] = parseFloat(inp.value); });
-            }
+let checks=document.querySelectorAll('#memberCheckGrid input[type=checkbox]');
+let parts=[...checks].filter(c=>c.checked).map(c=>c.value);
 
-            const newRecord = {
-                id: Date.now(),
-                name: n,
-                amount: a * (document.getElementById('currency').value === 'JPY' ? 0.2 : 1),
-                payer: document.getElementById('payer').value,
-                participants: Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(c => c.value),
-                customAmounts: customSplitData,
-                date: new Date().toLocaleDateString()
-            };
+let custom={};
+if(isCustomSplit){
+let inputs=document.querySelectorAll('.custom');
+let sum=0;
 
-            trip.data.unshift(newRecord);
-            await setDoc(tripsRef, { trips: window.trips });
-            document.getElementById('itemName').value = ""; document.getElementById('amount').value = "";
-        };
+inputs.forEach((i,idx)=>{
+let v=parseFloat(i.value)||0;
+if(v>0){
+custom[trips[0].members[idx].name]=v;
+sum+=v;
+}
+});
 
-        window.deleteRecord = async (id) => {
-            if(!confirm("確定要刪除這筆帳目嗎？")) return;
-            const trip = window.trips.find(x => String(x.id) === String(window.currentTripId));
-            trip.data = trip.data.filter(d => d.id !== id);
-            await setDoc(tripsRef, { trips: window.trips });
-        };
+// auto補差額
+let diff=amount-sum;
+let first=Object.keys(custom)[0];
+if(first) custom[first]+=diff;
+}
 
-        function updateHeader(members) {
-            let h = `<th class="p-4">項目</th><th class="p-4">付款人</th><th class="p-4">金額</th>`;
-            members.forEach(m => h += `<th class="p-4 text-center">${m.name}</th>`);
-            h += `<th class="p-4 text-center">刪除</th>`;
-            document.getElementById('dynamicHeader').innerHTML = h;
-        }
+trips[0].data.unshift({
+name,
+amount,
+payer:payer.value,
+part:parts,
+custom:isCustomSplit?custom:null
+});
 
-        function calcSettlement(b) {
-            let d = [], c = [];
-            for (let k in b) {
-                if (b[k] < -1) d.push({n: k, v: Math.abs(b[k])});
-                if (b[k] > 1) c.push({n: k, v: b[k]});
-            }
-            let res = [];
-            while (d.length && c.length) {
-                let a = Math.min(d[0].v, c[0].v);
-                res.push(`<div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
-                    <span class="font-bold text-gray-600 text-xs">${d[0].n} <i class="fa-solid fa-arrow-right mx-2 text-blue-300"></i> ${c[0].n}</span>
-                    <span class="font-black text-blue-600">$${Math.round(a)}</span>
-                </div>`);
-                d[0].v -= a; c[0].v -= a;
-                if (d[0].v < 1) d.shift(); if (c[0].v < 1) c.shift();
-            }
-            document.getElementById('settlementAdvice').innerHTML = res.join('') || '<p class="col-span-3 text-center py-6 text-gray-300 font-bold">目前無須轉帳</p>';
-        }
+refreshAll();
+}
 
-        window.toggleTools = () => {
-            const p = document.getElementById('toolPanel');
-            p.style.maxHeight = p.style.maxHeight === '0px' ? '500px' : '0px';
-        };
+function calcSettlement(){
+let trip=trips[0];
+let balance={};
 
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshUI(); };
-    </script>
+trip.members.forEach(m=>balance[m.name]=0);
+
+trip.data.forEach(d=>{
+trip.members.forEach(m=>{
+let cost=0;
+if(d.custom && d.custom[m.name]) cost=d.custom[m.name];
+else if(d.part.includes(m.name)) cost=d.amount/d.part.length;
+
+balance[d.payer]+=cost;
+balance[m.name]-=cost;
+});
+});
+
+let debt=[],credit=[];
+for(let k in balance){
+if(balance[k]<0) debt.push({n:k,v:-balance[k]});
+if(balance[k]>0) credit.push({n:k,v:balance[k]});
+}
+
+let html="";
+while(debt.length && credit.length){
+let v=Math.min(debt[0].v,credit[0].v);
+html+=`<div>${debt[0].n} → ${credit[0].n} $${Math.round(v)}</div>`;
+debt[0].v-=v; credit[0].v-=v;
+if(debt[0].v<1) debt.shift();
+if(credit[0].v<1) credit.shift();
+}
+
+document.getElementById('settlementAdvice').innerHTML=html;
+}
+
+// 主題
+function applyTheme(t){
+document.body.className='pb-20';
+if(t!=='classic') document.body.classList.add('theme-'+t);
+}
+
+refreshAll();
+</script>
+
 </body>
 </html>
