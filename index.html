@@ -6,124 +6,120 @@
     <title>Paul的分帳神器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; }
-        body { background-color: var(--bg-color); color: #1e293b; font-family: sans-serif; }
-        .card { background-color: var(--card-bg); border-radius: 1.5rem; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    <style id="theme-styles">
+        :root { --primary-color: #3b82f6; --bg-decoration: none; }
         .sticky-header { position: sticky; top: 0; z-index: 50; }
-        .avatar { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
-        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        .expanded { max-height: 500px; }
-        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
-        @media print { .no-print { display: none !important; } }
+        .card { background: white; border-radius: 1.5rem; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .history-item { border-bottom: 1px solid #eee; padding: 10px; display: flex; justify-content: space-between; }
+        /* 1. 字體不要斜體 */
+        h1, div, span, p { font-style: normal !important; }
+        .expanded { max-height: 800px !important; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-slate-50 transition-all duration-500">
 
-    <nav class="sticky-header bg-white border-b p-3 shadow-md no-print">
+    <nav class="sticky-header bg-white border-b p-3 shadow-md">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="font-black text-blue-600 text-lg italic">Paul的分帳神器</div>
-            <div class="flex items-center gap-2">
-                <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 rounded-lg px-3 py-1.5 text-sm font-bold outline-none border-none"></select>
-                <button onclick="createNewTrip()" class="text-blue-600 hover:scale-110"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
+            <div class="font-black text-blue-600 text-lg">Paul的分帳神器</div>
+            <div class="flex items-center gap-3">
+                <select id="styleSelector" onchange="applyStyle(this.value)" class="bg-gray-100 rounded-lg px-2 py-1 text-xs font-bold outline-none">
+                    <option value="classic">經典風格</option>
+                    <option value="winter">日本滑雪</option>
+                    <option value="autumn">秋季漫步</option>
+                    <option value="night">深色模式</option>
+                    <option value="cyber">未來科技</option>
+                </select>
+                <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 rounded-lg px-3 py-1 text-sm font-bold"></select>
+                <button onclick="createNewTrip()" class="text-blue-600"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
             </div>
         </div>
     </nav>
 
-    <header class="sticky-header bg-slate-900 text-white p-6 shadow-lg no-print" style="top: 60px;">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <header class="sticky-header bg-slate-900 text-white p-6 shadow-lg" style="top: 56px;">
+        <div class="max-w-7xl mx-auto flex justify-between items-start">
             <div>
-                <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-2xl font-black p-1 rounded hover:bg-white/10">載入中...</h1>
-                <p class="text-[10px] text-white/50 mt-1"><i class="fa-brands fa-google mr-1"></i>匯率基準：Google Finance 實時參考 (0.215)</p>
+                <h1 id="tripTitle" class="text-2xl font-black mb-1">載入中...</h1>
+                <p class="text-[10px] text-white/50">
+                    <i class="fa-brands fa-google mr-1"></i> 
+                    匯率基準：Google Finance 實時參考 (0.20) 
+                    <a href="https://www.google.com/search?q=JPY+to+TWD" target="_blank" class="underline text-blue-400 ml-1">點我查詢</a>
+                </p>
             </div>
-            <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20">工具與歷史</button>
+            <button onclick="toggleTools()" class="bg-white/10 px-4 py-2 rounded-xl text-xs font-bold border border-white/20">工具與歷史紀錄</button>
         </div>
-        <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
-            <div class="bg-white/10 p-4 rounded-2xl flex flex-wrap gap-3">
-                <button onclick="exportToCSV()" class="bg-green-600 px-4 py-1.5 rounded-lg text-xs font-bold">匯出 CSV</button>
-                <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold">列印報表</button>
-                <button onclick="deleteTripBtn()" class="bg-red-500/80 px-4 py-1.5 rounded-lg text-xs font-bold">刪除專案</button>
-            </div>
-            <div class="bg-white/5 rounded-2xl overflow-hidden">
-                <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
-                <div id="historyList" class="max-h-40 overflow-y-auto"></div>
+        <div id="toolPanel" class="max-w-7xl mx-auto overflow-hidden max-h-0 transition-all duration-300 mt-4">
+            <div class="bg-white/10 p-4 rounded-2xl space-y-4">
+                <div class="flex gap-2">
+                    <button onclick="exportToCSV()" class="bg-green-600 px-4 py-1.5 rounded-lg text-xs font-bold">匯出 CSV</button>
+                    <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold">列印報表</button>
+                    <button onclick="deleteTripBtn()" class="bg-red-500 px-4 py-1.5 rounded-lg text-xs font-bold">刪除此專案</button>
+                </div>
+                <div class="border-t border-white/10 pt-3">
+                    <p class="text-[10px] font-bold text-white/40 mb-2">編輯歷史紀錄 (可還原)</p>
+                    <div id="historyList" class="max-h-40 overflow-y-auto space-y-1"></div>
+                </div>
             </div>
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div class="lg:col-span-1 space-y-6 no-print">
+        <div class="lg:col-span-1 space-y-6">
             <div class="card border-t-4 border-blue-500">
-                <h3 class="font-bold mb-4 text-sm"><i class="fa-solid fa-plus mr-2"></i>新增消費</h3>
-                
-                <div class="mb-3">
-                    <label class="text-[10px] font-bold text-gray-400">消費類別</label>
-                    <select id="category" class="w-full border p-2.5 rounded-xl mt-1 text-sm bg-gray-50">
+                <h3 class="font-bold mb-4 text-sm uppercase">新增消費項目</h3>
+                <div class="space-y-3">
+                    <select id="category" class="w-full border p-2.5 rounded-xl text-sm bg-gray-50">
                         <option value="餐飲">🍽️ 餐飲</option><option value="購物">🛍️ 購物</option>
                         <option value="娛樂">🎡 娛樂</option><option value="住宿">🏨 住宿</option>
                         <option value="交通">🚗 交通</option><option value="其它">📦 其它</option>
                     </select>
-                </div>
-
-                <input id="itemName" type="text" placeholder="項目名稱" class="w-full border p-3 rounded-xl mb-3 text-sm outline-none">
-                
-                <div class="flex border rounded-xl overflow-hidden mb-3">
-                    <select id="currency" class="bg-gray-50 px-3 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
-                    <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold text-sm">
-                </div>
-
-                <div class="mb-4">
-                    <label class="text-[10px] font-bold text-gray-400">付款人</label>
-                    <select id="payer" class="w-full border p-2.5 rounded-xl mt-1 font-bold text-sm"></select>
-                </div>
-
-                <div class="mb-6">
-                    <div class="flex justify-between items-center mb-2">
-                        <label class="text-[10px] font-bold text-gray-400">參與人員 (勾選)</label>
-                        <div class="flex items-center gap-1">
-                            <input id="newMemberName" type="text" placeholder="+ 人名" class="text-[10px] border-b outline-none w-12 px-1">
-                            <button onclick="addMember()" class="text-blue-500"><i class="fa-solid fa-plus-circle"></i></button>
-                        </div>
+                    <input id="itemName" type="text" placeholder="項目名稱" class="w-full border p-3 rounded-xl text-sm">
+                    <div class="flex border rounded-xl overflow-hidden">
+                        <select id="currency" class="bg-gray-100 px-3 text-xs font-bold border-r">
+                            <option value="TWD">TWD</option><option value="JPY">JPY</option>
+                        </select>
+                        <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 font-bold text-sm">
                     </div>
-                    <div id="memberCheckGrid" class="grid grid-cols-1 gap-2"></div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-400">是誰付錢？</label>
+                        <select id="payer" class="w-full border p-2.5 rounded-xl font-bold text-sm"></select>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-[10px] font-bold text-gray-400">參與成員</label>
+                        </div>
+                        <div id="memberCheckGrid" class="grid grid-cols-1 gap-1"></div>
+                    </div>
+                    <button onclick="addRow()" class="w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg bg-blue-600">加入帳目清單</button>
                 </div>
-                <button onclick="addRow()" class="w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95" style="background-color: var(--primary-color);">加入清單</button>
-            </div>
-
-            <div class="card">
-                <h3 class="font-bold mb-4 text-sm">⚖️ 個人差額結算</h3>
-                <div id="balanceList" class="space-y-2"></div>
             </div>
         </div>
 
         <div class="lg:col-span-3 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card flex flex-col md:flex-row items-center gap-6 bg-slate-800 text-white overflow-hidden">
-                    <div class="flex-1">
-                        <p class="text-white/50 font-bold text-xs uppercase tracking-widest">總支出 (TWD)</p>
-                        <p id="totalSpent" class="text-4xl font-black mt-2 tracking-tighter">$0</p>
-                        <div id="categoryBreakdown" class="mt-4 space-y-1"></div>
+                <div class="card bg-slate-800 text-white flex items-center justify-between overflow-hidden">
+                    <div>
+                        <p class="text-white/50 font-bold text-[10px] tracking-widest">總支出 (TWD)</p>
+                        <p id="totalSpent" class="text-4xl font-black mt-1">$0</p>
                     </div>
-                    <div class="w-32 h-32">
+                    <div class="w-36 h-36 relative">
                         <canvas id="expenseChart"></canvas>
                     </div>
                 </div>
-                <div class="card border-2 border-dashed border-blue-100">
-                    <h3 class="font-bold mb-3 text-sm"><i class="fa-solid fa-paper-plane text-blue-400 mr-2"></i>轉帳建議</h3>
+                <div class="card border-2 border-dashed border-blue-200">
+                    <h3 class="font-bold mb-3 text-sm">轉帳建議 (最省事)</h3>
                     <div id="settlementAdvice" class="space-y-2"></div>
                 </div>
             </div>
 
             <div class="card p-0 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50 border-b text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            <tr id="dynamicHeader"></tr>
-                        </thead>
-                        <tbody id="expenseList" class="text-xs divide-y"></tbody>
-                    </table>
-                </div>
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50 border-b text-[10px] font-black text-gray-400 uppercase">
+                        <tr id="dynamicHeader"></tr>
+                    </thead>
+                    <tbody id="expenseList" class="text-xs divide-y"></tbody>
+                </table>
             </div>
         </div>
     </main>
@@ -132,12 +128,12 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // Firebase 初始化 (同前)
         const firebaseConfig = { apiKey: "AIzaSyCLz4iTnKXkba26S4fRUdV6d0DTZiRXSg0", authDomain: "travel-expense-7dbaa.firebaseapp.com", projectId: "travel-expense-7dbaa", storageBucket: "travel-expense-7dbaa.firebasestorage.app", messagingSenderId: "745263115640", appId: "1:745263115640:web:5714e2c1d041969ecaec8d" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
-        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png'];
-
+        
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
         let chartInstance = null;
@@ -159,40 +155,41 @@
             document.getElementById('tripTitle').innerText = trip.name;
             document.getElementById('tripDropdown').innerHTML = window.trips.map(t => `<option value="${t.id}" ${String(t.id) === String(window.currentTripId) ? 'selected' : ''}>${t.name}</option>`).join('');
             
-            if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
+            // 成員清單
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             document.getElementById('memberCheckGrid').innerHTML = trip.members.map(m => `
-                <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                    <img src="${m.photo || AVATARS[0]}" class="avatar">
-                    <span class="text-xs font-bold flex-1">${m.name}</span>
+                <div class="flex items-center gap-2 p-1.5 bg-gray-50 rounded-lg">
                     <input type="checkbox" value="${m.name}" checked class="participant-checkbox w-4 h-4">
+                    <span class="text-xs font-bold">${m.name}</span>
                 </div>`).join('');
 
-            // 表格標頭
-            let headerHtml = `<th class="p-4">類別 / 項目</th><th class="p-4">付款人</th><th class="p-4">總金額</th>`;
+            // 表格渲染
+            let headerHtml = `<th class="p-4">項目/類別</th><th class="p-4">付款人</th><th class="p-4">金額(TWD)</th>`;
             trip.members.forEach(m => headerHtml += `<th class="p-4 text-center">${m.name}</th>`);
             headerHtml += `<th class="p-4"></th>`;
             document.getElementById('dynamicHeader').innerHTML = headerHtml;
 
-            let totalTWD = 0; 
-            let balances = {}; 
-            let catStats = { '餐飲':0, '購物':0, '娛樂':0, '住宿':0, '交通':0, '其它':0 };
-            trip.members.forEach(m => balances[m.name] = 0);
+            let total = 0; let bal = {}; let catData = {};
+            trip.members.forEach(m => bal[m.name] = 0);
 
             document.getElementById('expenseList').innerHTML = (trip.data || []).map(item => {
-                totalTWD += item.amount;
-                balances[item.payer] += item.amount;
-                catStats[item.category || '其它'] += item.amount;
+                total += item.amount;
+                bal[item.payer] += item.amount;
+                catData[item.category] = (catData[item.category] || 0) + item.amount;
                 const share = item.amount / item.participants.length;
-                
+
                 let memberCells = trip.members.map(m => {
-                    const isPart = item.participants.includes(m.name);
-                    if (isPart) balances[m.name] -= share;
-                    return `<td class="p-4 text-center">${isPart ? `<span class="text-blue-500 font-bold">✔️</span>` : '-'}</td>`;
+                    const isP = item.participants.includes(m.name);
+                    if (isP) bal[m.name] -= share;
+                    // 5. 顯示每個人分多少錢
+                    return `<td class="p-4 text-center">${isP ? `<span class="text-blue-500 font-bold">✔️</span><br><span class="text-[9px] text-gray-400">$${fmt(share)}</span>` : '-'}</td>`;
                 }).join('');
 
                 return `<tr>
-                    <td class="p-4"><div class="flex items-center gap-2"><span class="text-lg">${getIcon(item.category)}</span><div><div class="font-bold">${item.name}</div><div class="text-[9px] text-gray-400">${item.date}</div></div></div></td>
+                    <td class="p-4">
+                        <div class="font-bold text-slate-700">${item.category} | ${item.name}</div>
+                        <div class="text-[9px] text-gray-400">${item.date} ${item.rateInfo || ''}</div>
+                    </td>
                     <td class="p-4 font-bold text-gray-500">${item.payer}</td>
                     <td class="p-4 font-black text-blue-600">$${fmt(item.amount)}</td>
                     ${memberCells}
@@ -200,104 +197,96 @@
                 </tr>`;
             }).join('');
 
-            document.getElementById('totalSpent').innerText = `$${fmt(totalTWD)}`;
-            document.getElementById('balanceList').innerHTML = trip.members.map(m => `
-                <div class="flex justify-between items-center p-2 rounded-xl ${balances[m.name] >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}">
-                    <span class="font-bold text-xs">${m.name}</span>
-                    <span class="font-black text-xs">${balances[m.name] >= 0 ? '+' : ''}${fmt(balances[m.name])}</span>
-                </div>`).join('');
-
+            document.getElementById('totalSpent').innerText = `$${fmt(total)}`;
+            
+            // 8. 圓餅圖文字直顯邏輯
+            updateChart(catData);
+            
+            // 7. 歷史紀錄
             document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `
-                <div class="history-item">
-                    <span class="text-white/70">${h.time} - ${h.action}</span>
-                    <button onclick="restoreHistory(${i})" class="bg-blue-600 text-white px-2 py-1 rounded text-[9px] font-bold">還原</button>
+                <div class="history-item text-white/70">
+                    <span>${h.time} - ${h.action}</span>
+                    <button onclick="restoreHistory(${i})" class="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px]">還原</button>
                 </div>`).join('');
 
-            updateChart(catStats);
-            calculateAdvice(balances);
+            calculateSettlement(bal);
         };
 
-        function getIcon(cat) {
-            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
-            return icons[cat] || '📦';
-        }
-
+        // 8. 圓餅圖 (包含外掛設定，直接顯示文字)
         function updateChart(stats) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
-            const data = Object.values(stats);
-            const labels = Object.keys(stats);
-            
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: labels,
+                    labels: Object.keys(stats),
                     datasets: [{
-                        data: data,
-                        backgroundColor: ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#94a3b8'],
-                        borderWidth: 0
+                        data: Object.values(stats),
+                        backgroundColor: ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#94a3b8']
                     }]
                 },
+                plugins: [ChartDataLabels],
                 options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    cutout: '70%'
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (value, ctx) => {
+                                return ctx.chart.data.labels[ctx.dataIndex] + '\n$' + fmt(value);
+                            }
+                        }
+                    }
                 }
             });
         }
 
+        // 6. 活潑風格應用
+        window.applyStyle = (style) => {
+            const body = document.body;
+            const styleTag = document.getElementById('theme-styles');
+            if (style === 'winter') {
+                body.className = "min-h-screen bg-blue-50 transition-all duration-500";
+                styleTag.innerHTML += `.card { border: 2px solid #bfdbfe; border-radius: 2rem !important; }`;
+            } else if (style === 'autumn') {
+                body.className = "min-h-screen bg-orange-50 transition-all duration-500";
+            } else if (style === 'classic') {
+                body.className = "min-h-screen bg-slate-50 transition-all duration-500";
+            }
+            // 這裡可以根據風格再細修
+        }
+
+        // 3. 修復外幣新增邏輯
         window.addRow = async () => {
             const name = document.getElementById('itemName').value;
             let amount = parseFloat(document.getElementById('amount').value);
-            const cat = document.getElementById('category').value;
             const curr = document.getElementById('currency').value;
+            const cat = document.getElementById('category').value;
             const payer = document.getElementById('payer').value;
             const parts = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
 
-            if (!name || isNaN(amount) || parts.length === 0) return alert("資訊填寫不完整");
+            if (!name || isNaN(amount)) return alert("請填寫名稱與金額");
 
             let rateInfo = "";
-            if (curr === 'JPY') { amount = amount * 0.215; rateInfo = `(JPY換算)`; }
+            if (curr === 'JPY') {
+                // 2. 匯率改為 0.20
+                rateInfo = `(JPY ${fmt(amount)} * 0.20)`;
+                amount = amount * 0.2;
+            }
 
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (!trip.history) trip.history = [];
-            trip.history.unshift({ time: new Date().toLocaleTimeString(), action: `新增 ${name}`, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
-            if (trip.history.length > 10) trip.history.pop();
-
+            trip.history.unshift({ time: new Date().toLocaleTimeString(), action: `新增 ${name}`, data: JSON.parse(JSON.stringify(trip.data)) });
+            
             trip.data.unshift({ id: Date.now(), name, amount, category: cat, payer, participants: parts, rateInfo, date: new Date().toLocaleDateString() });
             await setDoc(tripsRef, { trips: window.trips });
             document.getElementById('itemName').value = ''; document.getElementById('amount').value = '';
         };
 
-        window.restoreHistory = async (i) => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const target = trip.history[i];
-            trip.data = JSON.parse(JSON.stringify(target.data));
-            trip.members = JSON.parse(JSON.stringify(target.members));
-            await setDoc(tripsRef, { trips: window.trips });
-        };
-
-        function calculateAdvice(balances) {
-            let debtors = [], creditors = [];
-            for (let name in balances) {
-                if (balances[name] < -1) debtors.push({ name, amt: Math.abs(balances[name]) });
-                else if (balances[name] > 1) creditors.push({ name, amt: balances[name] });
-            }
-            let advice = [];
-            while (debtors.length && creditors.length) {
-                let d = debtors[0], c = creditors[0], settle = Math.min(d.amt, c.amt);
-                advice.push(`<div class="flex items-center justify-between text-[11px] p-2 bg-blue-50/50 rounded-lg border border-blue-100">
-                    <span><b>${d.name}</b> <i class="fa-solid fa-arrow-right mx-1 text-gray-300"></i> <b>${c.name}</b></span>
-                    <span class="font-black text-blue-600">$${fmt(settle)}</span>
-                </div>`);
-                d.amt -= settle; c.amt -= settle;
-                if (d.amt <= 1) debtors.shift(); if (c.amt <= 1) creditors.shift();
-            }
-            document.getElementById('settlementAdvice').innerHTML = advice.length ? advice.join('') : '<p class="text-xs text-gray-400">目前無須轉帳</p>';
+        window.toggleTools = () => {
+            document.getElementById('toolPanel').classList.toggle('max-h-0');
+            document.getElementById('toolPanel').classList.toggle('max-h-screen');
         }
-
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
     </script>
 </body>
 </html>
