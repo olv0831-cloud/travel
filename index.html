@@ -6,32 +6,19 @@
     <title>Paul的分帳神器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style id="theme-styles">
-        /* 基礎樣式 */
-        @media print { .no-print { display: none !important; } }
+    <style>
+        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; --text-color: #1e293b; --border-color: #e2e8f0; --tab-active-bg: #eff6ff; }
+        body { background-color: var(--bg-color); color: var(--text-color); transition: all 0.5s; font-family: sans-serif; }
         .active-tab { border-bottom: 4px solid var(--primary-color); color: var(--primary-color); background: var(--tab-active-bg); font-weight: bold; }
-        .tab { transition: all 0.3s; cursor: pointer; padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 4px; }
+        .tab { transition: all 0.3s; cursor: pointer; padding: 8px 16px; border-radius: 99px; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; cursor: pointer; }
         .member-col { min-width: 90px; text-align: center; border-left: 1px solid var(--border-color); }
-        .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; cursor: pointer; transition: transform 0.2s; }
-        
-        /* 動態風格變數預設 (經典) */
-        :root {
-            --primary-color: #3b82f6;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --header-bg: #0f172a;
-            --text-color: #1e293b;
-            --border-color: #e2e8f0;
-            --tab-active-bg: #eff6ff;
-        }
-
-        body { background-color: var(--bg-color); color: var(--text-color); transition: background 0.5s; }
-        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 1.5rem; shadow-sm; }
         header { background-color: var(--header-bg); transition: background 0.5s; }
     </style>
 </head>
 <body class="min-h-screen pb-20">
-    <nav class="bg-white border-b p-4 no-print sticky top-0 z-10 shadow-sm">
+    <nav class="bg-white border-b p-4 sticky top-0 z-10 shadow-sm">
         <div class="max-w-6xl mx-auto flex items-center">
             <div class="font-black text-blue-600 mr-6 text-lg">Paul的分帳神器</div>
             <div id="tripTabs" class="flex space-x-2 overflow-x-auto flex-1 p-1"></div>
@@ -39,7 +26,7 @@
         </div>
     </nav>
 
-    <header class="text-white p-8 no-print shadow-inner">
+    <header class="text-white p-8 shadow-inner">
         <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
                 <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-3xl font-black cursor-text p-1 rounded hover:bg-white/10 transition">載入中...</h1>
@@ -53,70 +40,61 @@
                 </select>
             </div>
             <div class="flex gap-2">
-                <button onclick="exportToCSV()" class="bg-green-600 px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-green-700 transition"><i class="fa-solid fa-file-excel mr-1"></i>匯出 CSV</button>
                 <button onclick="window.print()" class="bg-blue-600 px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-blue-700 transition">列印報表</button>
             </div>
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div class="lg:col-span-1 space-y-6 no-print">
-            <div class="card shadow-sm">
-                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-blue-500"></i>參與人員</h3>
+        <div class="lg:col-span-1 space-y-6">
+            <div class="card">
+                <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-blue-500"></i>參與分帳人員</h3>
                 <div id="memberList" class="space-y-2 mb-4"></div>
                 <div class="flex gap-2">
-                    <input id="newMemberName" type="text" placeholder="姓名" class="flex-1 border p-2 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
-                    <button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-black transition">新增</button>
+                    <input id="newMemberName" type="text" placeholder="姓名" class="flex-1 border p-2 rounded-xl bg-gray-50 text-sm outline-none">
+                    <button onclick="addMember()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold">新增</button>
                 </div>
-                <input type="file" id="avatarInput" class="hidden" accept="image/*" onchange="handleAvatarUpload(this)">
             </div>
 
-            <div class="card shadow-sm">
+            <div class="card">
                 <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-cart-plus text-orange-500"></i>新增消費</h3>
-                <input id="itemName" type="text" placeholder="項目" class="w-full border p-3 rounded-xl mb-3 bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none">
+                <input id="itemName" type="text" placeholder="項目 (如：午餐)" class="w-full border p-3 rounded-xl mb-3 bg-gray-50 outline-none">
                 <div class="flex border rounded-xl overflow-hidden mb-3 bg-gray-50">
-                    <select id="currency" class="bg-gray-100 px-2 text-xs font-bold border-r">
-                        <option value="TWD">TWD</option>
-                        <option value="JPY">JPY</option>
-                        <option value="USD">USD</option>
-                    </select>
+                    <select id="currency" class="bg-gray-100 px-2 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
                     <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold">
                 </div>
                 <div class="bg-blue-50 p-3 rounded-xl mb-3">
-                    <p class="text-[10px] text-blue-500 font-bold mb-1">付款人</p>
-                    <select id="payer" class="w-full border-none bg-transparent font-bold focus:ring-0"></select>
+                    <p class="text-[10px] text-blue-500 font-bold mb-1">誰付錢的？</p>
+                    <select id="payer" class="w-full border-none bg-transparent font-bold"></select>
                 </div>
-                <div id="participantChecks" class="space-y-1 mb-4 max-h-60 overflow-y-auto"></div>
-                <button id="addBtn" onclick="addRow()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl hover:-translate-y-1 transition">加入帳目</button>
+                <div id="participantChecks" class="space-y-1 mb-4"></div>
+                <button id="addBtn" onclick="addRow()" class="w-full text-white py-4 rounded-2xl font-black shadow-xl hover:-translate-y-1 transition" style="background-color: var(--primary-color);">加入帳目</button>
             </div>
         </div>
 
         <div class="lg:col-span-3 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="card shadow-sm">
+                <div class="card">
                     <h3 class="font-bold mb-4">⚖️ 個人結算 (差額)</h3>
                     <div id="balanceList" class="space-y-2 text-sm"></div>
                 </div>
-                <div class="card shadow-sm border-green-100">
+                <div class="card border-green-100">
                     <h3 class="font-bold text-green-700 mb-4">🚀 轉帳建議</h3>
-                    <div id="settlementAdvice" class="space-y-2 text-sm text-gray-600"></div>
+                    <div id="settlementAdvice" class="space-y-2 text-sm"></div>
                 </div>
-                <div id="totalCard" class="bg-blue-600 p-6 rounded-3xl text-white flex flex-col justify-center shadow-xl transition-all duration-500">
-                    <p class="text-white/80 font-bold">總支出 (TWD)</p>
+                <div id="totalCard" class="p-6 rounded-3xl text-white flex flex-col justify-center shadow-xl transition-all" style="background-color: var(--primary-color);">
+                    <p class="text-white/80 font-bold">當前專案總支出</p>
                     <p id="totalSpent" class="text-4xl font-black mt-2">$0</p>
                 </div>
             </div>
 
-            <div class="card shadow-sm overflow-hidden overflow-x-auto p-0 border-none">
-                <table class="w-full text-left min-w-[900px]">
-                    <thead id="dynamicHeader" class="bg-gray-50 text-gray-500 text-[10px] uppercase font-black border-b"></thead>
+            <div class="card overflow-x-auto p-0">
+                <table class="w-full text-left min-w-[800px]">
+                    <thead class="bg-gray-50 text-gray-500 text-[10px] font-black border-b">
+                        <tr id="dynamicHeader"></tr>
+                    </thead>
                     <tbody id="expenseList" class="text-sm"></tbody>
                 </table>
-            </div>
-
-            <div class="bg-gray-100/50 p-6 rounded-2xl border-2 border-dashed border-gray-300 no-print">
-                <h3 class="font-bold text-gray-400 mb-4 text-xs uppercase tracking-widest"><i class="fa-solid fa-history"></i> 編輯歷史</h3>
-                <div id="historyList" class="space-y-2 max-h-40 overflow-y-auto text-xs"></div>
             </div>
         </div>
     </main>
@@ -137,12 +115,11 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
+        const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/847/847969.png';
 
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
-        const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/847/847969.png';
 
-        // 風格設定檔
         const themes = {
             classic: { primary: '#3b82f6', bg: '#f8fafc', card: '#ffffff', header: '#0f172a', text: '#1e293b', border: '#e2e8f0', tab: '#eff6ff' },
             cool: { primary: '#00d2ff', bg: '#0b0e14', card: '#161b22', header: '#010409', text: '#c9d1d9', border: '#30363d', tab: '#1f2937' },
@@ -150,15 +127,6 @@
             winter: { primary: '#0ea5e9', bg: '#f0f9ff', card: '#ffffff', header: '#0c4a6e', text: '#0c4a6e', border: '#e0f2fe', tab: '#f0f9ff' },
             summer: { primary: '#f59e0b', bg: '#fffbeb', card: '#ffffff', header: '#b45309', text: '#78350f', border: '#fef3c7', tab: '#fffbeb' },
             autumn: { primary: '#d97706', bg: '#fff7ed', card: '#ffffff', header: '#7c2d12', text: '#431407', border: '#ffedd5', tab: '#fff7ed' }
-        };
-
-        window.changeTheme = async (themeKey) => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip) {
-                trip.theme = themeKey;
-                applyTheme(themeKey);
-                await setDoc(tripsRef, { trips: window.trips });
-            }
         };
 
         function applyTheme(key) {
@@ -171,99 +139,98 @@
             root.style.setProperty('--text-color', t.text);
             root.style.setProperty('--border-color', t.border);
             root.style.setProperty('--tab-active-bg', t.tab);
-            
-            document.getElementById('totalCard').style.backgroundColor = t.primary;
-            document.getElementById('addBtn').style.backgroundColor = t.primary;
             document.getElementById('themeSelector').value = key;
         }
+
+        window.changeTheme = async (val) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip) { trip.theme = val; applyTheme(val); await setDoc(tripsRef, { trips: window.trips }); }
+        };
 
         onSnapshot(tripsRef, (docSnap) => {
             if (docSnap.exists()) {
                 window.trips = docSnap.data().trips || [];
                 if (!window.currentTripId && window.trips.length > 0) window.currentTripId = window.trips[0].id;
-                const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-                if (trip) applyTheme(trip.theme || 'classic');
                 refreshAll();
             }
         });
 
-        // 其餘邏輯 (sync, refreshAll, addRow...) 保持與前次版本一致並適配變數
-        async function sync(logAction) {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip) {
-                if (!trip.history) trip.history = [];
-                trip.history.unshift({ time: new Date().toLocaleString(), action: logAction, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
-                if (trip.history.length > 10) trip.history.pop();
-            }
-            await setDoc(tripsRef, { trips: window.trips });
-        }
-
-        function refreshAll() {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (!trip) return;
-
-            document.getElementById('tripTitle').innerText = trip.name;
-            document.getElementById('tripTabs').innerHTML = window.trips.map(t => `<div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab' : 'text-gray-400'}">${t.name}</div>`).join('');
+        window.refreshAll = () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)) || window.trips[0];
+            if (!trip) { document.getElementById('tripTitle').innerText = "請按 + 建立專案"; return; }
             
+            applyTheme(trip.theme || 'classic');
+            document.getElementById('tripTitle').innerText = trip.name;
+            document.getElementById('tripTabs').innerHTML = window.trips.map(t => `
+                <div onclick="switchTrip(${t.id})" class="tab ${String(t.id) === String(window.currentTripId) ? 'active-tab' : 'text-gray-400'}">${t.name}</div>
+            `).join('');
+
+            if (!trip.members) trip.members = [{name: 'Paul', photo: null}];
             document.getElementById('memberList').innerHTML = trip.members.map(m => `
                 <div class="flex items-center justify-between border-b border-gray-50 pb-2">
-                    <div class="flex items-center gap-2">
-                        <img src="${m.photo || DEFAULT_AVATAR}" class="avatar" onclick="triggerAvatarUpload('${m.name}')">
-                        <span class="font-bold">${m.name}</span>
-                    </div>
+                    <div class="flex items-center gap-2"><img src="${m.photo || DEFAULT_AVATAR}" class="avatar"><span class="font-bold">${m.name}</span></div>
                     <i onclick="removeMember('${m.name}')" class="fa-solid fa-times text-gray-300 hover:text-red-500 cursor-pointer"></i>
                 </div>`).join('');
 
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             document.getElementById('participantChecks').innerHTML = trip.members.map(m => `
-                <div class="participant-row flex items-center justify-between p-1">
-                    <label class="flex items-center gap-2 text-xs font-bold cursor-pointer"><input type="checkbox" value="${m.name}" checked class="participant-checkbox"> ${m.name}</label>
+                <div class="flex items-center justify-between p-1">
+                    <label class="text-xs font-bold"><input type="checkbox" value="${m.name}" checked class="participant-checkbox"> ${m.name}</label>
                     <input type="number" placeholder="固定$" class="custom-amount w-12 text-[10px] border rounded">
                 </div>`).join('');
 
-            // 總支出與結算 (略，維持前次邏輯)...
             let total = 0; let bals = {}; trip.members.forEach(m => bals[m.name] = 0);
-            document.getElementById('expenseList').innerHTML = trip.data.map(item => {
+            document.getElementById('dynamicHeader').innerHTML = `<th class="p-4">項目</th><th class="p-4">付款人</th>` + trip.members.map(m => `<th class="p-4 member-col">${m.name}</th>`).join('') + `<th class="p-4 text-right">總額</th><th class="p-4"></th>`;
+
+            document.getElementById('expenseList').innerHTML = (trip.data || []).map(item => {
                 total += item.amount; bals[item.payer] += item.amount;
                 let cells = trip.members.map(m => {
-                    const p = item.participants.find(part => part.name === m.name);
-                    if (p) { bals[m.name] -= p.finalShare; return `<td class="p-4 member-col text-blue-500 font-bold">✔️ $${Math.round(p.finalShare)}</td>`; }
+                    const p = item.participants.find(part => (part.name === m.name || part === m.name));
+                    if (p) {
+                        const share = (typeof p === 'object' && p.finalShare) ? p.finalShare : (item.amount / item.participants.length);
+                        bals[m.name] -= share;
+                        return `<td class="p-4 member-col text-blue-500 font-bold">✔️ $${Math.round(share)}</td>`;
+                    }
                     return `<td class="p-4 member-col text-gray-200">-</td>`;
                 }).join('');
-                return `<tr class="border-b"><td class="p-4 font-bold">${item.name}</td><td class="p-4 text-[10px] text-gray-400 italic">${item.rateInfo || "-"}</td><td class="p-4">${item.payer}</td>${cells}<td class="p-4 text-right font-black">$${item.amount.toLocaleString()}</td><td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash text-red-200 hover:text-red-500 cursor-pointer"></i></td></tr>`;
+                return `<tr class="border-b"><td class="p-4 font-bold">${item.name}</td><td class="p-4">${item.payer}</td>${cells}<td class="p-4 text-right font-black">$${item.amount.toLocaleString()}</td><td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash text-red-200 hover:text-red-500 cursor-pointer"></i></td></tr>`;
             }).join('');
 
             document.getElementById('totalSpent').innerText = `$${Math.round(total).toLocaleString()}`;
             document.getElementById('balanceList').innerHTML = trip.members.map(m => `<div class="flex justify-between p-2 rounded-xl ${bals[m.name]>=0?'bg-green-50 text-green-700':'bg-red-50 text-red-700'}"><span class="font-bold">${m.name}</span><b>${Math.round(bals[m.name])}</b></div>`).join('');
-            
-            // 歷史紀錄
-            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `<div class="flex justify-between bg-white p-2 rounded border"><span>${h.action} (${h.time})</span><button onclick="restoreHistory(${i})" class="bg-gray-800 text-white px-2 py-0.5 rounded">還原</button></div>`).join('');
-        }
-
-        // 下列 window 函數與前版本邏輯相同
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.addRow = async () => { /* ...前次代碼邏輯... */ };
-        window.addMember = async () => { /* ...前次代碼邏輯... */ };
-        window.removeMember = async (n) => { /* ...前次代碼邏輯... */ };
-        window.deleteExpense = async (id) => { /* ...前次代碼邏輯... */ };
-        window.updateTripName = async () => {
-            const newName = document.getElementById('tripTitle').innerText;
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip && newName) { trip.name = newName; await sync("重新命名專案"); }
         };
+
+        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
         window.createNewTrip = async () => {
             const n = prompt('新專案名稱：', '新計畫');
             if (n) {
-                const nt = { id: Date.now(), name: n, members: [{name: 'Paul', photo: null}], data: [], history: [], theme: 'classic' };
-                window.trips.push(nt); window.currentTripId = nt.id; await sync("建立專案");
+                const nt = { id: Date.now(), name: n, members: [{name: 'Paul', photo: null}], data: [], theme: 'classic' };
+                window.trips.push(nt); window.currentTripId = nt.id; await setDoc(tripsRef, { trips: window.trips });
             }
         };
-        window.triggerAvatarUpload = (n) => { window.activeMember = n; document.getElementById('avatarInput').click(); };
-        window.handleAvatarUpload = (input) => {
-            const file = input.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-                const mem = trip.members.find(m => m.name === window.activeMember);
-                if (mem) { mem.photo = e.target.result; await sync("更新頭像"); }
-            }; reader.readAsData
+        window.addMember = async () => {
+            const n = document.getElementById('newMemberName').value.trim();
+            if (!n) return;
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (trip && !trip.members.find(m => m.name === n)) {
+                trip.members.push({name: n, photo: null}); await setDoc(tripsRef, { trips: window.trips });
+                document.getElementById('newMemberName').value = '';
+            }
+        };
+        window.addRow = async () => {
+            const name = document.getElementById('itemName').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const payer = document.getElementById('payer').value;
+            if (!name || isNaN(amount)) return;
+
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const selected = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
+            const parts = selected.map(s => ({ name: s, finalShare: amount / selected.length }));
+
+            trip.data.push({ id: Date.now(), name, amount, payer, participants: parts });
+            await setDoc(tripsRef, { trips: window.trips });
+            document.getElementById('itemName').value = ''; document.getElementById('amount').value = '';
+        };
+    </script>
+</body>
+</html>
