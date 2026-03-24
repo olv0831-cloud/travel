@@ -5,114 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paul的分帳神器</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; --text-color: #1e293b; --border-color: #e2e8f0; }
-        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; }
-        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; cursor: pointer; }
-        .error-border { border: 2px solid #ef4444 !important; }
-        .error-msg { color: #ef4444; font-size: 11px; font-weight: bold; margin-top: -8px; margin-bottom: 8px; display: none; }
-        header { background-color: var(--header-bg); }
-        #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); width: 90%; max-width: 350px; }
-        .picker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        :root { --primary-color: #3b82f6; --bg-color: #f8fafc; --card-bg: #ffffff; --header-bg: #0f172a; }
+        body { background-color: var(--bg-color); color: #1e293b; font-family: sans-serif; }
+        .card { background-color: var(--card-bg); border-radius: 1.5rem; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .sticky-header { position: sticky; top: 0; z-index: 50; }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
         .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        .expanded { max-height: 200px; }
+        .expanded { max-height: 500px; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
         @media print { .no-print { display: none !important; } }
     </style>
 </head>
-<body class="min-h-screen pb-10">
-    <div id="avatarPicker">
-        <h3 class="font-bold mb-4 text-center">選擇頭像</h3>
-        <div class="picker-grid" id="pickerGrid"></div>
-        <button onclick="closePicker()" class="w-full mt-4 bg-gray-100 py-2 rounded-xl text-sm font-bold">取消</button>
-    </div>
+<body class="min-h-screen">
 
-    <nav class="bg-white border-b p-3 sticky top-0 z-10 shadow-sm no-print">
-        <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <div class="font-black text-blue-600 text-base">Paul的分帳神器</div>
+    <nav class="sticky-header bg-white border-b p-3 shadow-md no-print">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="font-black text-blue-600 text-lg italic">Paul的分帳神器</div>
             <div class="flex items-center gap-2">
-                <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 border-none rounded-lg px-3 py-1.5 text-sm font-bold outline-none"></select>
-                <button onclick="createNewTrip()" class="text-blue-600 hover:scale-110"><i class="fa-solid fa-plus-circle text-xl"></i></button>
+                <select id="tripDropdown" onchange="switchTrip(this.value)" class="bg-gray-100 rounded-lg px-3 py-1.5 text-sm font-bold outline-none border-none"></select>
+                <button onclick="createNewTrip()" class="text-blue-600 hover:scale-110"><i class="fa-solid fa-plus-circle text-2xl"></i></button>
             </div>
         </div>
     </nav>
 
-    <header class="text-white p-6 no-print">
-        <div class="max-w-6xl mx-auto">
-            <div class="flex flex-col gap-4">
-                <div class="flex justify-between items-center">
-                    <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-2xl font-black p-1 rounded hover:bg-white/10">載入中...</h1>
-                    <button onclick="toggleTools()" class="bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold border border-white/20"><i class="fa-solid fa-screwdriver-wrench mr-1"></i>工具選單</button>
-                </div>
-                
-                <div id="toolPanel" class="collapsible-content flex flex-wrap gap-2">
-                    <div class="bg-white/10 p-3 rounded-xl border border-white/10 w-full flex flex-wrap gap-2">
-                        <select id="themeSelector" onchange="changeTheme(this.value)" class="bg-slate-800 text-white rounded-lg px-3 py-1.5 text-xs font-bold border border-white/20">
-                            <option value="classic">經典風格</option><option value="cool">酷炫科技</option><option value="spring">粉嫩春天</option>
-                            <option value="winter">純淨冬天</option><option value="summer">熱情夏天</option><option value="autumn">楓葉秋天</option>
-                        </select>
-                        <button onclick="exportToCSV()" class="bg-green-600 px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-file-excel mr-1"></i>CSV</button>
-                        <button onclick="window.print()" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>列印報表</button>
-                        <button onclick="deleteTripBtn()" class="bg-red-500/80 px-3 py-1.5 rounded-lg text-xs font-bold ml-auto"><i class="fa-solid fa-trash mr-1"></i>刪除專案</button>
-                    </div>
-                </div>
+    <header class="sticky-header bg-slate-900 text-white p-6 shadow-lg no-print" style="top: 60px;">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div>
+                <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-2xl font-black p-1 rounded hover:bg-white/10">載入中...</h1>
+                <p class="text-[10px] text-white/50 mt-1"><i class="fa-brands fa-google mr-1"></i>匯率基準：Google Finance 實時參考 (0.215)</p>
+            </div>
+            <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20">工具與歷史</button>
+        </div>
+        <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
+            <div class="bg-white/10 p-4 rounded-2xl flex flex-wrap gap-3">
+                <button onclick="exportToCSV()" class="bg-green-600 px-4 py-1.5 rounded-lg text-xs font-bold">匯出 CSV</button>
+                <button onclick="window.print()" class="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold">列印報表</button>
+                <button onclick="deleteTripBtn()" class="bg-red-500/80 px-4 py-1.5 rounded-lg text-xs font-bold">刪除專案</button>
+            </div>
+            <div class="bg-white/5 rounded-2xl overflow-hidden">
+                <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
+                <div id="historyList" class="max-h-40 overflow-y-auto"></div>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div class="lg:col-span-1 space-y-4 no-print">
-            <div class="card bg-blue-50/50 border-blue-100">
-                <h3 class="font-bold mb-4 flex items-center gap-2 text-blue-600 text-sm"><i class="fa-solid fa-cart-plus"></i> 新增消費與人員</h3>
+    <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="lg:col-span-1 space-y-6 no-print">
+            <div class="card border-t-4 border-blue-500">
+                <h3 class="font-bold mb-4 text-sm"><i class="fa-solid fa-plus mr-2"></i>新增消費</h3>
                 
-                <div id="itemNameError" class="error-msg">⚠️ 請輸入項目名稱（如：晚餐）</div>
-                <input id="itemName" type="text" placeholder="項目（如：晚餐）" class="w-full border p-3 rounded-xl mb-3 bg-white outline-none text-sm shadow-sm">
+                <div class="mb-3">
+                    <label class="text-[10px] font-bold text-gray-400">消費類別</label>
+                    <select id="category" class="w-full border p-2.5 rounded-xl mt-1 text-sm bg-gray-50">
+                        <option value="餐飲">🍽️ 餐飲</option><option value="購物">🛍️ 購物</option>
+                        <option value="娛樂">🎡 娛樂</option><option value="住宿">🏨 住宿</option>
+                        <option value="交通">🚗 交通</option><option value="其它">📦 其它</option>
+                    </select>
+                </div>
+
+                <input id="itemName" type="text" placeholder="項目名稱" class="w-full border p-3 rounded-xl mb-3 text-sm outline-none">
                 
-                <div id="amountError" class="error-msg">⚠️ 請輸入有效金額</div>
-                <div class="flex border rounded-xl overflow-hidden mb-3 bg-white shadow-sm">
-                    <select id="currency" class="bg-gray-50 px-2 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
+                <div class="flex border rounded-xl overflow-hidden mb-3">
+                    <select id="currency" class="bg-gray-50 px-3 text-xs font-bold border-r"><option value="TWD">TWD</option><option value="JPY">JPY</option></select>
                     <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold text-sm">
                 </div>
 
                 <div class="mb-4">
-                    <p class="text-[10px] text-gray-400 font-bold mb-2 uppercase tracking-tighter">付款人</p>
-                    <select id="payer" class="w-full border p-2 rounded-xl bg-white font-bold text-sm shadow-sm"></select>
+                    <label class="text-[10px] font-bold text-gray-400">付款人</label>
+                    <select id="payer" class="w-full border p-2.5 rounded-xl mt-1 font-bold text-sm"></select>
                 </div>
 
-                <div class="mb-4">
+                <div class="mb-6">
                     <div class="flex justify-between items-center mb-2">
-                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">參與成員</p>
+                        <label class="text-[10px] font-bold text-gray-400">參與人員 (勾選)</label>
                         <div class="flex items-center gap-1">
-                            <input id="newMemberName" type="text" placeholder="+ 新增成員" class="text-[10px] border-b bg-transparent outline-none w-16 px-1">
-                            <button onclick="addMember()" class="text-blue-500"><i class="fa-solid fa-plus-circle text-sm"></i></button>
+                            <input id="newMemberName" type="text" placeholder="+ 人名" class="text-[10px] border-b outline-none w-12 px-1">
+                            <button onclick="addMember()" class="text-blue-500"><i class="fa-solid fa-plus-circle"></i></button>
                         </div>
                     </div>
-                    <div id="memberCheckGrid" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1"></div>
+                    <div id="memberCheckGrid" class="grid grid-cols-1 gap-2"></div>
                 </div>
-
-                <button id="addBtn" onclick="addRow()" class="w-full text-white py-3.5 rounded-2xl font-black shadow-lg text-sm transition-transform active:scale-95" style="background-color: var(--primary-color);">加入帳目</button>
+                <button onclick="addRow()" class="w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95" style="background-color: var(--primary-color);">加入清單</button>
             </div>
-            
-            <div class="card"><h3 class="font-bold mb-3 text-sm">⚖️ 結算概覽</h3><div id="balanceList" class="space-y-2 text-xs"></div></div>
+
+            <div class="card">
+                <h3 class="font-bold mb-4 text-sm">⚖️ 個人差額結算</h3>
+                <div id="balanceList" class="space-y-2"></div>
+            </div>
         </div>
 
-        <div class="lg:col-span-3 space-y-4">
-            <div id="totalCard" class="p-6 rounded-3xl text-white shadow-xl flex justify-between items-end" style="background-color: var(--primary-color);">
-                <div><p class="text-white/80 font-bold text-xs">總支出 (TWD)</p><p id="totalSpent" class="text-4xl font-black mt-1">$0</p></div>
-                <div id="settlementAdvice" class="text-[10px] text-white/90 bg-black/20 p-2 rounded-xl text-right max-w-[50%]"></div>
+        <div class="lg:col-span-3 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card flex flex-col md:flex-row items-center gap-6 bg-slate-800 text-white overflow-hidden">
+                    <div class="flex-1">
+                        <p class="text-white/50 font-bold text-xs uppercase tracking-widest">總支出 (TWD)</p>
+                        <p id="totalSpent" class="text-4xl font-black mt-2 tracking-tighter">$0</p>
+                        <div id="categoryBreakdown" class="mt-4 space-y-1"></div>
+                    </div>
+                    <div class="w-32 h-32">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                </div>
+                <div class="card border-2 border-dashed border-blue-100">
+                    <h3 class="font-bold mb-3 text-sm"><i class="fa-solid fa-paper-plane text-blue-400 mr-2"></i>轉帳建議</h3>
+                    <div id="settlementAdvice" class="space-y-2"></div>
+                </div>
             </div>
 
-            <div class="card overflow-x-auto p-0 border-none shadow-sm">
-                <table class="w-full text-left min-w-[600px]">
-                    <thead class="bg-gray-50 text-gray-400 text-[10px] font-black border-b uppercase tracking-widest"><tr id="dynamicHeader"></tr></thead>
-                    <tbody id="expenseList" class="text-xs"></tbody>
-                </table>
-            </div>
-
-            <div class="bg-gray-100/50 p-4 rounded-2xl border-2 border-dashed border-gray-200 no-print">
-                <h3 class="font-bold text-gray-400 mb-2 text-[10px] uppercase"><i class="fa-solid fa-history mr-1"></i>歷史紀錄 (點擊還原)</h3>
-                <div id="historyList" class="flex flex-wrap gap-2"></div>
+            <div class="card p-0 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            <tr id="dynamicHeader"></tr>
+                        </thead>
+                        <tbody id="expenseList" class="text-xs divide-y"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
@@ -125,30 +136,13 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
-        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/219/219983.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154444.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154460.png'];
+        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png'];
 
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
-        window.activeMemberName = "";
+        let chartInstance = null;
 
-        const themes = {
-            classic: { primary: '#3b82f6', bg: '#f8fafc', header: '#0f172a' },
-            cool: { primary: '#0ea5e9', bg: '#0b0e14', header: '#010409' },
-            spring: { primary: '#ec4899', bg: '#fff5f7', header: '#db2777' },
-            winter: { primary: '#0ea5e9', bg: '#f0f9ff', header: '#0c4a6e' },
-            summer: { primary: '#f59e0b', bg: '#fffbeb', header: '#b45309' },
-            autumn: { primary: '#d97706', bg: '#fff7ed', header: '#7c2d12' }
-        };
-
-        async function sync(action) {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip) {
-                if (!trip.history) trip.history = [];
-                trip.history.unshift({ time: new Date().toLocaleTimeString(), action, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
-                if (trip.history.length > 5) trip.history.pop();
-            }
-            await setDoc(tripsRef, { trips: window.trips });
-        }
+        const fmt = (num) => Math.round(num).toLocaleString('en-US');
 
         onSnapshot(tripsRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -158,150 +152,152 @@
             }
         });
 
-        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
-
         window.refreshAll = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (!trip) { document.getElementById('tripTitle').innerText = "建立新專案"; return; }
-            
-            const t = themes[trip.theme || 'classic'];
-            document.documentElement.style.setProperty('--primary-color', t.primary);
-            document.documentElement.style.setProperty('--bg-color', t.bg);
-            document.documentElement.style.setProperty('--header-bg', t.header);
+            if (!trip) return;
 
             document.getElementById('tripTitle').innerText = trip.name;
             document.getElementById('tripDropdown').innerHTML = window.trips.map(t => `<option value="${t.id}" ${String(t.id) === String(window.currentTripId) ? 'selected' : ''}>${t.name}</option>`).join('');
-
+            
             if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             document.getElementById('memberCheckGrid').innerHTML = trip.members.map(m => `
-                <div class="flex items-center gap-2 bg-white border border-gray-100 p-1.5 rounded-xl shadow-sm">
-                    <img src="${m.photo || AVATARS[0]}" class="avatar" onclick="openPicker('${m.name}')">
-                    <label class="text-[10px] font-bold flex-1 truncate">${m.name}</label>
-                    <input type="checkbox" value="${m.name}" checked class="participant-checkbox scale-75">
+                <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
+                    <img src="${m.photo || AVATARS[0]}" class="avatar">
+                    <span class="text-xs font-bold flex-1">${m.name}</span>
+                    <input type="checkbox" value="${m.name}" checked class="participant-checkbox w-4 h-4">
                 </div>`).join('');
 
-            let totalTWD = 0; let bals = {}; trip.members.forEach(m => bals[m.name] = 0);
-            document.getElementById('dynamicHeader').innerHTML = `<th class="p-4">項目</th>` + trip.members.map(m => `<th class="p-4 text-center">${m.name}</th>`).join('') + `<th class="p-4 text-right">總計</th><th class="p-4"></th>`;
+            // 表格標頭
+            let headerHtml = `<th class="p-4">類別 / 項目</th><th class="p-4">付款人</th><th class="p-4">總金額</th>`;
+            trip.members.forEach(m => headerHtml += `<th class="p-4 text-center">${m.name}</th>`);
+            headerHtml += `<th class="p-4"></th>`;
+            document.getElementById('dynamicHeader').innerHTML = headerHtml;
+
+            let totalTWD = 0; 
+            let balances = {}; 
+            let catStats = { '餐飲':0, '購物':0, '娛樂':0, '住宿':0, '交通':0, '其它':0 };
+            trip.members.forEach(m => balances[m.name] = 0);
 
             document.getElementById('expenseList').innerHTML = (trip.data || []).map(item => {
-                totalTWD += item.amount; if(bals[item.payer] !== undefined) bals[item.payer] += item.amount;
-                let cells = trip.members.map(m => {
-                    const p = item.participants.find(part => (part.name === m.name || part === m.name));
-                    if (p) {
-                        const share = item.amount / item.participants.length;
-                        if(bals[m.name] !== undefined) bals[m.name] -= share;
-                        return `<td class="p-4 text-center text-blue-500 font-bold">✔️</td>`;
-                    }
-                    return `<td class="p-4 text-center text-gray-200">-</td>`;
+                totalTWD += item.amount;
+                balances[item.payer] += item.amount;
+                catStats[item.category || '其它'] += item.amount;
+                const share = item.amount / item.participants.length;
+                
+                let memberCells = trip.members.map(m => {
+                    const isPart = item.participants.includes(m.name);
+                    if (isPart) balances[m.name] -= share;
+                    return `<td class="p-4 text-center">${isPart ? `<span class="text-blue-500 font-bold">✔️</span>` : '-'}</td>`;
                 }).join('');
-                return `<tr class="border-b">
-                    <td class="p-4"><div class="font-bold">${item.name}</div><div class="text-[9px] text-gray-400">${item.date} ${item.rateInfo || ""}</div></td>
-                    ${cells}<td class="p-4 text-right font-black">$${Math.round(item.amount).toLocaleString()}</td>
+
+                return `<tr>
+                    <td class="p-4"><div class="flex items-center gap-2"><span class="text-lg">${getIcon(item.category)}</span><div><div class="font-bold">${item.name}</div><div class="text-[9px] text-gray-400">${item.date}</div></div></div></td>
+                    <td class="p-4 font-bold text-gray-500">${item.payer}</td>
+                    <td class="p-4 font-black text-blue-600">$${fmt(item.amount)}</td>
+                    ${memberCells}
                     <td class="p-4 text-center"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 hover:text-red-500 cursor-pointer"></i></td>
                 </tr>`;
             }).join('');
 
-            document.getElementById('totalSpent').innerText = `$${Math.round(totalTWD).toLocaleString()}`;
-            document.getElementById('balanceList').innerHTML = trip.members.map(m => `<div class="flex justify-between p-2 rounded-xl ${bals[m.name]>=0?'bg-green-50 text-green-700':'bg-red-50 text-red-700'}"><span class="font-bold">${m.name}</span><b>${Math.round(bals[m.name])}</b></div>`).join('');
-            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `<button onclick="restoreHistory(${i})" class="bg-white px-2 py-1 rounded-lg border text-[10px] shadow-sm">${h.action}</button>`).join('');
+            document.getElementById('totalSpent').innerText = `$${fmt(totalTWD)}`;
+            document.getElementById('balanceList').innerHTML = trip.members.map(m => `
+                <div class="flex justify-between items-center p-2 rounded-xl ${balances[m.name] >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}">
+                    <span class="font-bold text-xs">${m.name}</span>
+                    <span class="font-black text-xs">${balances[m.name] >= 0 ? '+' : ''}${fmt(balances[m.name])}</span>
+                </div>`).join('');
+
+            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `
+                <div class="history-item">
+                    <span class="text-white/70">${h.time} - ${h.action}</span>
+                    <button onclick="restoreHistory(${i})" class="bg-blue-600 text-white px-2 py-1 rounded text-[9px] font-bold">還原</button>
+                </div>`).join('');
+
+            updateChart(catStats);
+            calculateAdvice(balances);
         };
 
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.createNewTrip = async () => {
-            const n = prompt('專案名稱：', '新旅遊計畫');
-            if (n) {
-                const nt = { id: Date.now(), name: n, members: [{name: 'Paul', photo: AVATARS[0]}], data: [], history: [], theme: 'classic' };
-                window.trips.push(nt); window.currentTripId = nt.id; await sync("建立專案");
-            }
-        };
-        window.deleteTripBtn = async () => {
-            if (confirm("確定刪除此專案？")) {
-                window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
-                window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
-                await setDoc(tripsRef, { trips: window.trips });
-            }
-        };
+        function getIcon(cat) {
+            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
+            return icons[cat] || '📦';
+        }
 
-        window.addMember = async () => {
-            const n = document.getElementById('newMemberName').value.trim();
-            if (!n) return;
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip.members.find(m => m.name === n)) return alert("姓名重複");
-            trip.members.push({name: n, photo: AVATARS[Math.floor(Math.random()*AVATARS.length)]});
-            document.getElementById('newMemberName').value = '';
-            await sync(`新增成員 ${n}`);
-        };
+        function updateChart(stats) {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            const data = Object.values(stats);
+            const labels = Object.keys(stats);
+            
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#94a3b8'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    cutout: '70%'
+                }
+            });
+        }
 
         window.addRow = async () => {
-            const nameInp = document.getElementById('itemName');
-            const amtInp = document.getElementById('amount');
-            const nameErr = document.getElementById('itemNameError');
-            const amtErr = document.getElementById('amountError');
-            
-            let hasError = false;
-            nameInp.classList.remove('error-border'); amtInp.parentElement.classList.remove('error-border');
-            nameErr.style.display = 'none'; amtErr.style.display = 'none';
-
-            if (!nameInp.value.trim()) { nameInp.classList.add('error-border'); nameErr.style.display = 'block'; hasError = true; }
-            if (!amtInp.value || parseFloat(amtInp.value) <= 0) { amtInp.parentElement.classList.add('error-border'); amtErr.style.display = 'block'; hasError = true; }
-            if (hasError) return;
-
-            let amount = parseFloat(amtInp.value);
+            const name = document.getElementById('itemName').value;
+            let amount = parseFloat(document.getElementById('amount').value);
+            const cat = document.getElementById('category').value;
             const curr = document.getElementById('currency').value;
             const payer = document.getElementById('payer').value;
+            const parts = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
+
+            if (!name || isNaN(amount) || parts.length === 0) return alert("資訊填寫不完整");
+
             let rateInfo = "";
-            if (curr === 'JPY') { const rate = 0.215; rateInfo = `(JPY ${amount} * ${rate})`; amount *= rate; }
-            
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const selected = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
-            if (selected.length === 0) return alert("請至少勾選一名參與人");
+            if (curr === 'JPY') { amount = amount * 0.215; rateInfo = `(JPY換算)`; }
 
-            trip.data.unshift({ id: Date.now(), name: nameInp.value, amount, payer, participants: selected, rateInfo, date: new Date().toLocaleDateString() });
-            await sync(`新增項目: ${nameInp.value}`);
-            nameInp.value = ''; amtInp.value = '';
-        };
-
-        window.deleteExpense = async (id) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            trip.data = trip.data.filter(d => d.id !== id);
-            await sync("刪除帳目");
-        };
+            if (!trip.history) trip.history = [];
+            trip.history.unshift({ time: new Date().toLocaleTimeString(), action: `新增 ${name}`, data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
+            if (trip.history.length > 10) trip.history.pop();
 
-        window.openPicker = (name) => { window.activeMemberName = name; document.getElementById('avatarPicker').style.display = 'block'; document.getElementById('pickerGrid').innerHTML = AVATARS.map(url => `<img src="${url}" class="avatar w-12 h-12" onclick="selectAvatar('${url}')">`).join(''); };
-        window.closePicker = () => document.getElementById('avatarPicker').style.display = 'none';
-        window.selectAvatar = async (url) => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const m = trip.members.find(mem => mem.name === window.activeMemberName);
-            if (m) { m.photo = url; await sync("更換頭像"); }
-            closePicker();
-        };
-
-        window.exportToCSV = () => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            let csv = "\uFEFF項目,日期,付款人,總額(TWD)\n";
-            trip.data.forEach(d => csv += `${d.name},${d.date},${d.payer},${d.amount}\n`);
-            const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-            link.download = `${trip.name}.csv`; link.click();
+            trip.data.unshift({ id: Date.now(), name, amount, category: cat, payer, participants: parts, rateInfo, date: new Date().toLocaleDateString() });
+            await setDoc(tripsRef, { trips: window.trips });
+            document.getElementById('itemName').value = ''; document.getElementById('amount').value = '';
         };
 
         window.restoreHistory = async (i) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            trip.data = JSON.parse(JSON.stringify(trip.history[i].data));
-            trip.members = JSON.parse(JSON.stringify(trip.history[i].members));
+            const target = trip.history[i];
+            trip.data = JSON.parse(JSON.stringify(target.data));
+            trip.members = JSON.parse(JSON.stringify(target.members));
             await setDoc(tripsRef, { trips: window.trips });
         };
 
-        window.updateTripName = async () => {
-            const newName = document.getElementById('tripTitle').innerText.trim();
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip && newName && newName !== trip.name) { trip.name = newName; await sync("重新命名專案"); }
-        };
+        function calculateAdvice(balances) {
+            let debtors = [], creditors = [];
+            for (let name in balances) {
+                if (balances[name] < -1) debtors.push({ name, amt: Math.abs(balances[name]) });
+                else if (balances[name] > 1) creditors.push({ name, amt: balances[name] });
+            }
+            let advice = [];
+            while (debtors.length && creditors.length) {
+                let d = debtors[0], c = creditors[0], settle = Math.min(d.amt, c.amt);
+                advice.push(`<div class="flex items-center justify-between text-[11px] p-2 bg-blue-50/50 rounded-lg border border-blue-100">
+                    <span><b>${d.name}</b> <i class="fa-solid fa-arrow-right mx-1 text-gray-300"></i> <b>${c.name}</b></span>
+                    <span class="font-black text-blue-600">$${fmt(settle)}</span>
+                </div>`);
+                d.amt -= settle; c.amt -= settle;
+                if (d.amt <= 1) debtors.shift(); if (c.amt <= 1) creditors.shift();
+            }
+            document.getElementById('settlementAdvice').innerHTML = advice.length ? advice.join('') : '<p class="text-xs text-gray-400">目前無須轉帳</p>';
+        }
 
-        window.changeTheme = async (val) => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            if (trip) { trip.theme = val; applyTheme(val); await setDoc(tripsRef, { trips: window.trips }); }
-        };
+        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
+        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
     </script>
 </body>
 </html>
