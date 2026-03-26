@@ -16,16 +16,15 @@
         .avatar { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; transition: transform 0.2s; }
         .avatar:hover { transform: scale(1.1); }
         
-        /* 修復 (1) 所需的 CSS 控制開關 */
+        /* 工具面板核心控制 */
         .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        .expanded { max-height: 1500px !important; }
+        .expanded { max-height: 2000px !important; }
 
         #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .avatar-option { width: 50px; height: 50px; cursor: pointer; border-radius: 50%; border: 2px solid transparent; }
         .avatar-option:hover { border-color: #3b82f6; }
 
-        /* 外幣管理標籤 */
-        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 999px; font-size: 11px; }
+        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 999px; font-size: 11px; }
 
         @media print { .no-print { display: none !important; } }
         @media (max-width: 768px) {
@@ -79,7 +78,7 @@
                 <div id="memberManageList" class="flex flex-wrap gap-4"></div>
             </div>
             <div class="bg-white/10 p-4 rounded-2xl">
-                <p class="text-[10px] font-bold text-white/40 uppercase mb-3">外幣匯率管理 (點擊紅色垃圾桶刪除)</p>
+                <p class="text-[10px] font-bold text-white/40 uppercase mb-3">外幣匯率管理</p>
                 <div id="currencyManageList" class="flex flex-wrap gap-3"></div>
             </div>
         </div>
@@ -115,7 +114,6 @@
                                 </select>
                                 <input id="amount" type="number" placeholder="金額" class="flex-1 p-2.5 outline-none font-bold text-sm min-w-0">
                             </div>
-                            <p id="rateDisplay" class="text-[9px] text-gray-400 mt-1 ml-1 font-bold">目前匯率: 1.00</p>
                         </div>
                         <div>
                             <label class="text-[10px] font-bold text-gray-400">付款人</label>
@@ -196,10 +194,148 @@
             }
         });
 
-        // 修復 (1): 控制面板顯示與隱藏
-        window.toggleTools = () => {
-            const panel = document.getElementById('toolPanel');
-            panel.classList.toggle('expanded');
+        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
+        window.toggleAddExpenseMobile = () => { if (window.innerWidth <= 768) document.getElementById('addExpenseSection').classList.toggle('active'); };
+
+        window.refreshAll = () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            if (!trip) return;
+
+            document.getElementById('tripTitle').innerText = trip.name;
+            document.getElementById('tripDropdown').innerHTML = window.trips.map(t => `<option value="${t.id}" ${String(t.id) === String(window.currentTripId) ? 'selected' : ''}>${t.name}</option>`).join('');
+            
+            if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
+            document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+            
+            // 人員管理
+            document.getElementById('memberManageList').innerHTML = trip.members.map((m, i) => `
+                <div class="flex items-center gap-2 bg-white/10 p-2 rounded-xl">
+                    <img src="${m.photo}" class="avatar" onclick="openAvatarPicker(${i})">
+                    <span class="text-xs font-bold">${m.name}</span>
+                    <button onclick="deleteMember(${i})" class="text-red-400 ml-2"><i class="fa-solid fa-xmark"></i></button>
+                </div>`).join('');
+
+            // 外幣管理
+            const savedCurrencies = trip.customCurrencies || {};
+            document.getElementById('currencyManageList').innerHTML = Object.keys(savedCurrencies).map(code => `
+                <div class="currency-manage-item">
+                    <span>${code}: ${savedCurrencies[code]}</span>
+                    <button onclick="deleteCurrency('${code}')" class="text-red-400"><i class="fa-solid fa-trash-can"></i></button>
+                </div>`).join('');
+            
+            const standardOptions = `<option value="TWD" data-rate="1">TWD</option><option value="JPY" data-rate="0.21">JPY</option>`;
+            const customOptions = Object.keys(savedCurrencies).map(code => `<option value="${code}" data-rate="${savedCurrencies[code]}">${code}</option>`).join('');
+            document.getElementById('currency').innerHTML = standardOptions + customOptions + `<option value="NEW">+ 新增</option>`;
+
+            // 核心修復：分攤人員勾選渲染
+            if(window.selectedMembers.length === 0) window.selectedMembers = trip.members.map(m => m.name);
+            document.getElementById('memberCheckGrid').innerHTML = trip.members.map(m => `
+                <div class="flex items-center gap-2 bg-gray-50 p-2 rounded-xl border cursor-pointer" onclick="toggleMemberSelect('${m.name}')">
+                    <img src="${m.photo}" class="w-6 h-6 rounded-full">
+                    <span class="text-xs font-bold ${window.selectedMembers.includes(m.name) ? 'text-blue-600' : 'text-gray-400'}">
+                        ${window.selectedMembers.includes(m.name) ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-regular fa-circle"></i>'} ${m.name}
+                    </span>
+                </div>`).join('');
+
+            // 計算與統計
+            let headerHtml = `<th class="p-4">項目</th><th class="p-4">付款人</th><th class="p-4">總額</th>`;
+            trip.members.forEach(m => headerHtml += `<th class="p-4 text-center">${m.name}</th>`);
+            headerHtml += `<th class="p-4">刪除</th>`;
+            document.getElementById('dynamicHeader').innerHTML = headerHtml;
+
+            let totalTWD = 0, balances = {}, catStats = { '餐飲':0, '購物':0, '娛樂':0, '住宿':0, '交通':0, '其它':0 };
+            trip.members.forEach(m => balances[m.name] = 0);
+
+            document.getElementById('expenseList').innerHTML = (trip.data || []).map(item => {
+                totalTWD += item.amount;
+                catStats[item.category || '其它'] += item.amount;
+                let memberCells = trip.members.map(m => {
+                    let cost = item.participants.includes(m.name) ? item.amount / item.participants.length : 0;
+                    if (cost > 0) { balances[item.payer] += cost; balances[m.name] -= cost; }
+                    return `<td class="p-4 text-center ${cost > 0 ? 'text-blue-600 font-bold' : 'text-gray-200'}">${cost > 0 ? fmt(cost) : '-'}</td>`;
+                }).join('');
+                return `<tr><td class="p-4 font-bold">${item.name}</td><td class="p-4 text-gray-500">${item.payer}</td><td class="p-4 font-black text-blue-600">$${fmt(item.amount)}</td>${memberCells}<td class="p-4"><i onclick="deleteExpense(${item.id})" class="fa-solid fa-trash-can text-red-200 cursor-pointer hover:text-red-500"></i></td></tr>`;
+            }).join('');
+
+            document.getElementById('totalSpent').innerText = `$${fmt(totalTWD)}`;
+            document.getElementById('balanceSummaryList').innerHTML = trip.members.map(m => `<div class="bg-gray-50 p-3 rounded-2xl border"><div class="flex justify-between font-bold text-xs"><span>${m.name}</span><span class="${balances[m.name] >= 0 ? 'text-green-600' : 'text-red-600'}">${balances[m.name] >= 0 ? '+' : ''}${fmt(balances[m.name])}</span></div></div>`).join('');
+
+            updateChart(catStats);
+            calculateAdvice(balances);
         };
 
-        window.toggleAddExpenseMobile = () => {
+        window.toggleMemberSelect = (name) => {
+            window.selectedMembers = window.selectedMembers.includes(name) ? window.selectedMembers.filter(n => n !== name) : [...window.selectedMembers, name];
+            refreshAll();
+        };
+
+        window.addRow = async () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const name = document.getElementById('itemName').value;
+            const rawAmt = parseFloat(document.getElementById('amount').value);
+            const rate = parseFloat(document.getElementById('currency').selectedOptions[0].dataset.rate) || 1;
+            if (!name || !rawAmt || window.selectedMembers.length === 0) return alert("請填寫名稱、金額並選擇至少一位分攤人員");
+            
+            trip.data.push({
+                id: Date.now(), name, amount: rawAmt * rate, 
+                payer: document.getElementById('payer').value,
+                category: document.getElementById('category').value,
+                participants: [...window.selectedMembers],
+                date: new Date().toLocaleDateString()
+            });
+            await setDoc(tripsRef, { trips: window.trips });
+            document.getElementById('itemName').value = ""; document.getElementById('amount').value = "";
+        };
+
+        window.deleteExpense = async (id) => { if(confirm("確定刪除？")) { const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); trip.data = trip.data.filter(d => d.id !== id); await setDoc(tripsRef, { trips: window.trips }); } };
+        window.addMember = async () => { const n = prompt("姓名:"); if(n) { const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); trip.members.push({name:n, photo:AVATARS[0]}); await setDoc(tripsRef, { trips: window.trips }); } };
+        window.deleteMember = async (i) => { const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); if(trip.members.length > 1) { trip.members.splice(i, 1); await setDoc(tripsRef, { trips: window.trips }); } };
+        window.deleteCurrency = async (code) => { const trip = window.trips.find(t => String(t.id) === String(window.currentTripId)); delete trip.customCurrencies[code]; await setDoc(tripsRef, { trips: window.trips }); };
+
+        window.checkNewCurrency = async (el) => {
+            if (el.value === 'NEW') {
+                const n = prompt("幣別代碼 (如 USD):")?.toUpperCase();
+                const r = prompt("匯率 (1 幣別 = ? 台幣):");
+                if (n && r) {
+                    const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+                    if(!trip.customCurrencies) trip.customCurrencies = {};
+                    trip.customCurrencies[n] = parseFloat(r);
+                    await setDoc(tripsRef, { trips: window.trips });
+                }
+            }
+        };
+
+        function updateChart(stats) {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: { datasets: [{ data: Object.values(stats), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#a855f7'], borderWidth: 0 }] },
+                options: { cutout: '75%', plugins: { legend: { display: false } } }
+            });
+        }
+
+        function calculateAdvice(balances) {
+            let adviceHtml = "", p = [], r = [];
+            Object.keys(balances).forEach(n => { if(balances[n] > 0.5) r.push({n, a: balances[n]}); else if(balances[n] < -0.5) p.push({n, a: -balances[n]}); });
+            while(p.length && r.length) {
+                let s = Math.min(p[0].a, r[0].a);
+                adviceHtml += `<div class="bg-white p-3 rounded-2xl border flex justify-between text-xs font-bold"><span>${p[0].n} → ${r[0].n}</span><span class="text-blue-600">$${fmt(s)}</span></div>`;
+                p[0].a -= s; r[0].a -= s; if(p[0].a <= 0.5) p.shift(); if(r[0].a <= 0.5) r.shift();
+            }
+            document.getElementById('settlementAdvice').innerHTML = adviceHtml || '<p class="text-xs text-gray-400">目前帳目平衡。</p>';
+        }
+
+        document.getElementById('avatarGrid').innerHTML = AVATARS.map((url, i) => `<img src="${url}" class="avatar-option" onclick="selectAvatar(${i})">`).join('');
+        window.openAvatarPicker = (i) => { currentEditingMemberIdx = i; document.getElementById('avatarPicker').style.display = 'block'; };
+        window.closeAvatarPicker = () => document.getElementById('avatarPicker').style.display = 'none';
+        window.selectAvatar = async (i) => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            trip.members[currentEditingMemberIdx].photo = AVATARS[i];
+            await setDoc(tripsRef, { trips: window.trips });
+            closeAvatarPicker();
+        };
+        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
+    </script>
+</body>
+</html>
