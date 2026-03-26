@@ -35,6 +35,7 @@
 
         @media print { .no-print { display: none !important; } }
         
+        /* 手機版收合樣式調整 */
         @media (max-width: 768px) {
             #addExpenseSection { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
             #addExpenseSection.active { max-height: 1500px; }
@@ -42,6 +43,9 @@
         @media (min-width: 769px) {
             #addExpenseSection { max-height: none !important; }
         }
+
+        /* 新增外幣管理樣式 */
+        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: bold; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -111,6 +115,10 @@
                 </div>
                 <div id="memberManageList" class="flex flex-wrap gap-4"></div>
             </div>
+            <div class="bg-white/10 p-4 rounded-2xl">
+                <p class="text-[10px] font-bold text-white/40 uppercase mb-3">外幣匯率管理 (點擊垃圾桶刪除)</p>
+                <div id="currencyManageList" class="flex flex-wrap gap-3"></div>
+            </div>
             <div class="bg-white/5 rounded-2xl overflow-hidden">
                 <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
                 <div id="historyList" class="max-h-40 overflow-y-auto"></div>
@@ -141,13 +149,11 @@
                         <div>
                             <label class="text-[10px] font-bold text-gray-400">金額/幣別</label>
                             <div class="flex border rounded-xl overflow-hidden mt-1">
-                                <div class="flex items-center bg-gray-50 px-2 border-r gap-1">
-                                    <select id="currency" onchange="checkNewCurrency(this)" class="bg-transparent text-[10px] font-bold outline-none cursor-pointer">
-                                        </select>
-                                    <button id="deleteCurrencyBtn" onclick="deleteActiveCurrency()" class="text-red-400 hover:text-red-600 text-[10px] hidden" title="刪除此幣別">
-                                        <i class="fa-solid fa-trash-can"></i>
-                                    </button>
-                                </div>
+                                <select id="currency" onchange="checkNewCurrency(this)" class="bg-gray-50 px-2 text-[10px] font-bold border-r">
+                                    <option value="TWD" data-rate="1">TWD</option>
+                                    <option value="JPY" data-rate="0.21">JPY</option>
+                                    <option value="NEW">+ 新增</option>
+                                </select>
                                 <input id="amount" type="number" placeholder="金額" class="flex-1 p-2.5 outline-none font-bold text-sm min-w-0" oninput="updateLiveShares()">
                             </div>
                             <p id="rateDisplay" class="text-[9px] text-gray-400 mt-1 ml-1 font-bold">目前匯率: 1.00</p>
@@ -322,30 +328,29 @@
                 </div>
             `).join('');
 
-            // --- 修復與優化外幣選單 ---
+            // 更新外幣選單與外幣管理清單
             const currencySelect = document.getElementById('currency');
+            const currencyManageList = document.getElementById('currencyManageList');
             const savedCurrencies = trip.customCurrencies || {};
             
-            // 移除錯誤數據 '0' 並建立乾淨的清單
-            if (savedCurrencies['0']) delete savedCurrencies['0'];
+            // 過濾掉可能是 '0' 或無效的鍵值
+            const validCustomCodes = Object.keys(savedCurrencies).filter(code => code !== '0' && code !== '');
             
-            let optionsHtml = `<option value="TWD" data-rate="1">TWD</option><option value="JPY" data-rate="0.21">JPY</option>`;
-            Object.keys(savedCurrencies).forEach(code => {
-                if(code !== 'TWD' && code !== 'JPY' && code !== '0') {
-                    optionsHtml += `<option value="${code}" data-rate="${savedCurrencies[code]}">${code}</option>`;
-                }
+            const standardOptions = `<option value="TWD" data-rate="1">TWD</option><option value="JPY" data-rate="0.21">JPY</option>`;
+            let customOptions = "";
+            let manageHtml = "";
+            
+            validCustomCodes.forEach(code => {
+                customOptions += `<option value="${code}" data-rate="${savedCurrencies[code]}">${code}</option>`;
+                manageHtml += `
+                    <div class="currency-manage-item">
+                        <span>${code}: ${savedCurrencies[code]}</span>
+                        <button onclick="deleteCurrency('${code}')" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>`;
             });
-            optionsHtml += `<option value="NEW">+ 新增外幣</option>`;
-            currencySelect.innerHTML = optionsHtml;
-
-            // 控制刪除按鈕顯示
-            const currentVal = currencySelect.value;
-            const deleteBtn = document.getElementById('deleteCurrencyBtn');
-            if (!['TWD', 'JPY', 'NEW'].includes(currentVal)) {
-                deleteBtn.classList.remove('hidden');
-            } else {
-                deleteBtn.classList.add('hidden');
-            }
+            
+            currencySelect.innerHTML = standardOptions + customOptions + `<option value="NEW">+ 新增</option>`;
+            currencyManageList.innerHTML = manageHtml || `<span class="text-white/20 text-[10px]">尚無自訂外幣</span>`;
 
             renderMemberGrid(trip);
 
@@ -414,160 +419,72 @@
             calculateAdvice(balances);
         };
 
-        // --- 優化：刪除當前選中的外幣 ---
-        window.deleteActiveCurrency = async () => {
-            const el = document.getElementById('currency');
-            const code = el.value;
+        window.deleteCurrency = async (code) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            
-            if (['TWD', 'JPY'].includes(code)) return alert("初始幣別無法刪除");
-            if (!confirm(`確定要移除 ${code} 嗎？`)) return;
-
-            if (trip.customCurrencies && trip.customCurrencies[code]) {
+            if (confirm(`確定要刪除 ${code} 及其匯率設定嗎？`)) {
                 delete trip.customCurrencies[code];
                 await setDoc(tripsRef, { trips: window.trips });
-                el.value = 'TWD';
-                window.refreshAll();
             }
         };
 
         window.checkNewCurrency = async (el) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const deleteBtn = document.getElementById('deleteCurrencyBtn');
-            
             if (el.value === 'NEW') {
-                const n = prompt("輸入外幣代碼 (如: USD, HKD, KRW):")?.toUpperCase().trim();
+                const n = prompt("輸入外幣代碼 (如: USD, HKD, KRW):")?.toUpperCase();
                 if (!n || n === '0') { el.value = 'TWD'; return; }
                 
                 try {
-                    // 即時抓取匯率
                     const response = await fetch(`https://open.er-api.com/v6/latest/${n}`);
                     const data = await response.json();
                     let r;
-                    if (data && data.result === "success" && data.rates['TWD']) {
+                    if (data && data.rates && data.rates['TWD']) {
                         r = data.rates['TWD'];
-                        alert(`成功獲取即時匯率：1 ${n} = ${r.toFixed(4)} TWD`);
+                        alert(`已自動搜尋匯率：1 ${n} = ${r.toFixed(4)} TWD`);
                     } else {
-                        r = prompt(`無法抓取 ${n} 匯率，請手動輸入 (1 ${n} = ? 台幣):`);
+                        r = prompt(`無法自動獲取匯率，請手動輸入 (1 ${n} = ? 台幣):`);
                     }
-
-                    if (r && !isNaN(r)) {
+                    
+                    if (r) {
                         if(!trip.customCurrencies) trip.customCurrencies = {};
                         trip.customCurrencies[n] = parseFloat(r);
                         await setDoc(tripsRef, { trips: window.trips });
-                        window.refreshAll(); // 刷新選單
-                        el.value = n; // 選中新幣別
+                        el.value = n;
                     } else {
                         el.value = 'TWD';
                     }
                 } catch (error) {
-                    const r = prompt(`連線失敗，請手動輸入匯率 (1 ${n} = ? 台幣):`);
-                    if (r && !isNaN(r)) {
+                    const r = prompt(`搜尋失敗，請手動輸入匯率 (1 ${n} = ? 台幣):`);
+                    if (r) {
                         if(!trip.customCurrencies) trip.customCurrencies = {};
                         trip.customCurrencies[n] = parseFloat(r);
                         await setDoc(tripsRef, { trips: window.trips });
-                        window.refreshAll();
                         el.value = n;
-                    } else el.value = 'TWD';
+                    } else {
+                        el.value = 'TWD';
+                    }
                 }
             }
-
-            // 更新匯率顯示與刪除鈕狀態
-            const selectedOpt = el.options[el.selectedIndex];
-            const rate = parseFloat(selectedOpt?.dataset.rate || 1);
-            document.getElementById('rateDisplay').innerText = `目前匯率: ${rate.toFixed(4)}`;
-            
-            if (!['TWD', 'JPY', 'NEW'].includes(el.value)) {
-                deleteBtn.classList.remove('hidden');
-            } else {
-                deleteBtn.classList.add('hidden');
-            }
+            const rate = parseFloat(el.options[el.selectedIndex]?.dataset.rate) || 1;
+            document.getElementById('rateDisplay').innerText = `目前匯率: ${rate.toFixed(2)}`;
             updateLiveShares();
         };
 
-        window.addRow = async () => {
-            const itemName = document.getElementById('itemName').value;
-            const amount = parseFloat(document.getElementById('amount').value);
-            const category = document.getElementById('category').value;
-            const payer = document.getElementById('payer').value;
-            const currency = document.getElementById('currency').value;
-            
-            // 每次新增時重新抓取匯率以確保最新 (除了手動鎖定的特殊需求外)
-            let currentRate = parseFloat(document.getElementById('currency').options[document.getElementById('currency').selectedIndex].dataset.rate);
-
-            if (!itemName || !amount) return alert("請填寫完整資訊");
-
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const cbs = document.querySelectorAll('.participant-checkbox:checked');
-            if (cbs.length === 0) return alert("請至少選擇一位分攤人員");
-
-            const participants = Array.from(cbs).map(cb => cb.value);
-            const totalTWD = amount * currentRate;
-
-            let customAmounts = null;
-            if (isCustomSplit) {
-                customAmounts = {};
-                let checkSum = 0;
-                const rows = document.querySelectorAll('#memberCheckGrid > div');
-                rows.forEach(row => {
-                    const name = row.querySelector('.participant-checkbox').value;
-                    const val = parseFloat(row.querySelector('.custom-val').value) || 0;
-                    customAmounts[name] = val;
-                    checkSum += val;
-                });
-                if (Math.abs(checkSum - totalTWD) > 2) return alert(`手動總和 ($${checkSum}) 與支出金額 ($${totalTWD}) 不符！`);
-            }
-
-            const newRecord = {
-                id: Date.now(),
-                name: itemName,
-                amount: totalTWD,
-                category: category,
-                payer: payer,
-                date: new Date().toLocaleDateString(),
-                rateInfo: currency !== 'TWD' ? `(${amount}${currency} x ${currentRate.toFixed(2)})` : '',
-                participants: participants,
-                customAmounts: customAmounts
-            };
-
-            trip.data.push(newRecord);
-            if(!trip.history) trip.history = [];
-            trip.history.unshift({ time: new Date().toLocaleString(), action: `新增 ${itemName} ($${fmt(totalTWD)})` });
-            if(trip.history.length > 10) trip.history.pop();
-
-            await setDoc(tripsRef, { trips: window.trips });
-            document.getElementById('itemName').value = '';
-            document.getElementById('amount').value = '';
+        window.changeTheme = (t) => {
+            document.body.className = `min-h-screen theme-${t}`;
+            localStorage.setItem('user-theme', t);
         };
 
-        // 其餘輔助函數 (維持原樣)
+        // 其餘邏輯保持不變...
         window.getIcon = (cat) => {
-            const map = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
-            return map[cat] || '📦';
-        };
-
-        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.deleteExpense = async (id) => {
-            if(!confirm("確定刪除此筆消費？")) return;
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            trip.data = trip.data.filter(d => d.id !== id);
-            await setDoc(tripsRef, { trips: window.trips });
-        };
-
-        window.toggleSplitMode = () => {
-            isCustomSplit = !isCustomSplit;
-            document.getElementById('splitModeBtn').innerText = isCustomSplit ? "切換回自動平均" : "切換手動指定金額";
-            refreshAll();
+            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
+            return icons[cat] || '📦';
         };
 
         Chart.register(ChartDataLabels);
         function updateChart(stats) {
-            const canvas = document.getElementById('expenseChart');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const dataValues = Object.values(stats);
-            const labels = Object.keys(stats);
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            const data = Object.values(stats).filter(v => v > 0);
+            const labels = Object.keys(stats).filter(k => stats[k] > 0);
             
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(ctx, {
@@ -575,80 +492,199 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        data: dataValues,
-                        backgroundColor: ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#818cf8', '#a78bfa']
+                        data: data,
+                        backgroundColor: ['#f87171', '#fb923c', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa'],
+                        borderWidth: 0
                     }]
                 },
                 options: {
-                    plugins: {
+                    plugins: { 
                         legend: { display: false },
                         datalabels: {
                             color: '#fff',
-                            formatter: (val, ctx) => {
-                                const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (val === 0 || sum === 0) return null;
-                                return labels[ctx.dataIndex] + '\n' + (val / sum * 100).toFixed(0) + '%';
-                            },
-                            font: { weight: 'bold', size: 10 }
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex]
                         }
-                    }
+                    },
+                    cutout: '70%'
                 }
             });
+            
+            let breakdownHtml = "";
+            Object.keys(stats).forEach((cat, i) => {
+                if(stats[cat] > 0) {
+                    breakdownHtml += `
+                        <div class="flex justify-between items-center text-[10px]">
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${chartInstance.data.datasets[0].backgroundColor[i]}"></span>${cat}</span>
+                            <span class="font-bold">$${fmt(stats[cat])}</span>
+                        </div>`;
+                }
+            });
+            document.getElementById('categoryBreakdown').innerHTML = breakdownHtml;
         }
 
         function calculateAdvice(balances) {
             let payers = [], receivers = [];
-            for (let name in balances) {
-                if (balances[name] > 1) receivers.push({ name, amt: balances[name] });
-                else if (balances[name] < -1) payers.push({ name, amt: -balances[name] });
-            }
-            receivers.sort((a, b) => b.amt - a.amt);
-            payers.sort((a, b) => b.amt - a.amt);
-
-            let advice = [];
+            Object.keys(balances).forEach(name => {
+                if (balances[name] > 0.5) receivers.push({ name, amt: balances[name] });
+                else if (balances[name] < -0.5) payers.push({ name, amt: -balances[name] });
+            });
+            
+            let adviceHtml = "";
+            receivers.sort((a,b) => b.amt - a.amt);
+            payers.sort((a,b) => b.amt - a.amt);
+            
             let i = 0, j = 0;
-            while (i < payers.length && j < receivers.length) {
-                let pay = payers[i], recv = receivers[j];
-                let settled = Math.min(pay.amt, recv.amt);
-                advice.push(`<div class="bg-blue-600 text-white p-3 rounded-2xl shadow-sm flex items-center justify-between">
-                    <span class="font-bold">${pay.name} ➔ ${recv.name}</span>
-                    <span class="font-black text-lg">$${fmt(settled)}</span>
-                </div>`);
-                pay.amt -= settled; recv.amt -= settled;
-                if (pay.amt <= 1) i++;
-                if (recv.amt <= 1) j++;
+            while(i < payers.length && j < receivers.length) {
+                let pay = payers[i], receive = receivers[j];
+                let settle = Math.min(pay.amt, receive.amt);
+                adviceHtml += `
+                    <div class="bg-white p-3 rounded-2xl border border-blue-100 flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-xs text-rose-500">${pay.name}</span>
+                            <i class="fa-solid fa-arrow-right text-gray-300 text-[10px]"></i>
+                            <span class="font-bold text-xs text-emerald-500">${receive.name}</span>
+                        </div>
+                        <span class="font-black text-sm text-blue-600">$${fmt(settle)}</span>
+                    </div>`;
+                pay.amt -= settle;
+                receive.amt -= settle;
+                if (pay.amt <= 0.5) i++;
+                if (receive.amt <= 0.5) j++;
             }
-            document.getElementById('settlementAdvice').innerHTML = advice.length ? advice.join('') : '<p class="text-gray-400 text-xs">帳目已平，無需轉帳。</p>';
+            document.getElementById('settlementAdvice').innerHTML = adviceHtml || '<p class="text-xs text-gray-400">目前帳目平整，無須轉帳。</p>';
         }
 
-        window.changeTheme = (t) => {
-            document.body.className = `min-h-screen theme-${t}`;
-            localStorage.setItem('user-theme', t);
+        window.toggleSplitMode = () => {
+            isCustomSplit = !isCustomSplit;
+            document.getElementById('splitModeBtn').innerText = isCustomSplit ? "切換回平均分攤" : "切換手動指定金額";
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            renderMemberGrid(trip);
+        };
+
+        window.addRow = async () => {
+            const name = document.getElementById('itemName').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const payer = document.getElementById('payer').value;
+            const category = document.getElementById('category').value;
+            const currency = document.getElementById('currency').value;
+            const rate = parseFloat(document.getElementById('currency').options[document.getElementById('currency').selectedIndex].dataset.rate);
+
+            if (!name || !amount) return alert("請填寫項目與金額");
+
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const participants = Array.from(document.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
+            
+            if (participants.length === 0) return alert("請至少勾選一位分攤人員");
+
+            let customAmounts = null;
+            if (isCustomSplit) {
+                customAmounts = {};
+                let sum = 0;
+                document.querySelectorAll('#memberCheckGrid > div').forEach(div => {
+                    const pName = div.querySelector('.participant-checkbox').value;
+                    const val = parseFloat(div.querySelector('.custom-val')?.value) || 0;
+                    if (val > 0) {
+                        customAmounts[pName] = val;
+                        sum += val;
+                    }
+                });
+                if (Math.abs(sum - (amount * rate)) > 1) {
+                    if (!confirm(`手動金額總和 ($${sum}) 與輸入金額 ($${fmt(amount*rate)}) 不符，是否繼續？`)) return;
+                }
+            }
+
+            const newItem = {
+                id: Date.now(),
+                name,
+                amount: amount * rate,
+                payer,
+                category,
+                date: new Date().toLocaleDateString(),
+                rateInfo: currency !== 'TWD' ? `(含匯率 ${rate})` : '',
+                participants,
+                customAmounts
+            };
+
+            if (!trip.data) trip.data = [];
+            trip.data.push(newItem);
+            
+            if (!trip.history) trip.history = [];
+            trip.history.unshift({ time: new Date().toLocaleString(), action: `新增: ${name} $${fmt(amount*rate)}` });
+            if (trip.history.length > 10) trip.history.pop();
+
+            await setDoc(tripsRef, { trips: window.trips });
+            
+            document.getElementById('itemName').value = "";
+            document.getElementById('amount').value = "";
+        };
+
+        window.deleteExpense = async (id) => {
+            if (!confirm("確定要刪除此筆消費嗎？")) return;
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const item = trip.data.find(d => d.id === id);
+            trip.data = trip.data.filter(d => d.id !== id);
+            trip.history.unshift({ time: new Date().toLocaleString(), action: `刪除: ${item.name}` });
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.switchTrip = (id) => {
+            window.currentTripId = id;
+            localStorage.setItem('current_trip_id', id);
+            refreshAll();
         };
 
         window.createNewTrip = async () => {
-            const name = prompt("請輸入新專案名稱 (如: 2026 東京行):");
+            const name = prompt("請輸入新專案名稱 (如: 2026東京行):");
             if (!name) return;
-            const newId = Date.now().toString();
-            window.trips.push({
-                id: newId,
+            const newTrip = {
+                id: Date.now().toString(),
                 name: name,
                 members: [{ name: 'Paul', photo: AVATARS[0] }],
                 data: [],
                 history: [],
                 customCurrencies: {}
-            });
+            };
+            window.trips.push(newTrip);
+            window.currentTripId = newTrip.id;
+            localStorage.setItem('current_trip_id', newTrip.id);
             await setDoc(tripsRef, { trips: window.trips });
-            switchTrip(newId);
         };
 
         window.deleteTripBtn = async () => {
-            if (window.trips.length <= 1) return alert("最後一個專案無法刪除");
-            if (!confirm(`確定要永久刪除專案「${document.getElementById('tripTitle').innerText}」嗎？此操作無法復原。`)) return;
+            if (window.trips.length <= 1) return alert("至少需保留一個專案");
+            if (!confirm("確定要刪除整個專案嗎？此操作無法還原！")) return;
             window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
             window.currentTripId = window.trips[0].id;
             localStorage.setItem('current_trip_id', window.currentTripId);
             await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
+        
+        window.restoreHistory = async (idx) => {
+            alert("此功能為記錄展示，如需完整回溯請手動調整資料。");
+        };
+
+        window.renderMemberGrid = (trip) => {
+            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            const rate = parseFloat(document.getElementById('currency').options[document.getElementById('currency').selectedIndex]?.dataset.rate) || 1;
+            const totalTWD = amount * rate;
+            const checkedCount = document.querySelectorAll('.participant-checkbox:checked').length || trip.members.length;
+            const avg = totalTWD / checkedCount;
+
+            document.getElementById('memberCheckGrid').innerHTML = trip.members.map((m, i) => `
+                <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-xl border border-gray-100 min-w-[120px]">
+                    <img src="${m.photo || AVATARS[0]}" class="avatar" onclick="openAvatarPicker(${i})">
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold">${m.name}</span>
+                        ${isCustomSplit ? 
+                            `<input type="number" placeholder="金額" class="custom-val w-20 bg-white border rounded p-1 text-[10px] font-bold" oninput="updateLiveShares()">` : 
+                            `<span class="text-[10px] text-blue-500 font-bold individual-share">~$${fmt(avg)}</span>`
+                        }
+                    </div>
+                    <input type="checkbox" value="${m.name}" checked class="participant-checkbox w-4 h-4 ml-auto" onchange="updateLiveShares()">
+                </div>`).join('');
         };
     </script>
 </body>
