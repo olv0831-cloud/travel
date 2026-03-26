@@ -224,11 +224,11 @@
 
         window.trips = [];
         window.currentTripId = localStorage.getItem('current_trip_id') || "";
-        window.selectedMembers = []; // 用於紀錄選取的人員
+        window.selectedMembers = []; 
         let chartInstance = null;
         window.isCustomSplit = false;
         let currentEditingMemberIdx = -1;
-        let lastSelectedCurrency = "TWD"; // 紀錄最後選取的幣別避免重新整理時跳掉
+        let lastSelectedCurrency = "TWD"; 
 
         const fmt = (num) => Math.round(num).toLocaleString('en-US');
 
@@ -313,7 +313,6 @@
             await setDoc(tripsRef, { trips: window.trips });
         };
 
-        // 核心邏輯：更新 UI
         window.refreshAll = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (!trip) return;
@@ -332,7 +331,6 @@
                 </div>
             `).join('');
 
-            // (1) 修正外幣選單與 (2) 外幣管理清單 (紅色垃圾桶)
             const currencySelect = document.getElementById('currency');
             const currencyManageList = document.getElementById('currencyManageList');
             const savedCurrencies = trip.customCurrencies || {};
@@ -352,19 +350,16 @@
             });
             
             currencySelect.innerHTML = standardOptions + customOptions + `<option value="NEW">+ 新增</option>`;
-            // 恢復之前選取的幣別
             currencySelect.value = lastSelectedCurrency || "TWD";
+            
+            // 修正：刷新時同步更新匯率數值顯示
+            const activeRate = parseFloat(currencySelect.options[currencySelect.selectedIndex]?.dataset.rate) || 1;
+            document.getElementById('rateDisplay').innerText = `目前匯率: ${activeRate.toFixed(2)}`;
+            
             currencyManageList.innerHTML = manageHtml || `<span class="text-white/20 text-[10px]">尚無自訂外幣</span>`;
 
-            // 修正：同步更新匯率數值顯示
-            const currentOption = currencySelect.options[currencySelect.selectedIndex];
-            const currentRate = parseFloat(currentOption?.dataset.rate) || 1;
-            document.getElementById('rateDisplay').innerText = `目前匯率: ${currentRate.toFixed(2)}`;
-
-            // (3) 恢復新增參與人員時左方的頭像
             renderMemberGrid(trip);
 
-            // 重新計算表格與統計
             let headerHtml = `<th class="p-4">類別 / 項目</th><th class="p-4">付款人</th><th class="p-4">總額</th>`;
             trip.members.forEach(m => headerHtml += `<th class="p-4 text-center">${m.name}</th>`);
             headerHtml += `<th class="p-4 text-center">刪除</th>`;
@@ -424,7 +419,6 @@
             calculateAdvice(balances);
         };
 
-        // (3) 恢復人員頭像的 Grid 渲染函數
         window.renderMemberGrid = (trip) => {
             const grid = document.getElementById('memberCheckGrid');
             if(!window.selectedMembers || window.selectedMembers.length === 0) {
@@ -453,7 +447,6 @@
             renderMemberGrid(trip);
         };
 
-        // (1) 外幣新增與刪除邏輯
         window.deleteCurrency = async (code) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (confirm(`確定要刪除 ${code} 及其匯率設定嗎？`)) {
@@ -465,8 +458,8 @@
         window.checkNewCurrency = async (el) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (el.value === 'NEW') {
-                const n = prompt("輸入外幣代碼 (如: USD, HKD, KRW):")?.trim().toUpperCase();
-                if (!n) { el.value = lastSelectedCurrency; return; }
+                const n = prompt("輸入外幣代碼 (如: USD, HKD, KRW):")?.toUpperCase();
+                if (!n) { el.value = 'TWD'; return; }
                 
                 try {
                     const response = await fetch(`https://open.er-api.com/v6/latest/${n}`);
@@ -479,26 +472,26 @@
                         r = prompt(`無法獲取匯率，請手動輸入 (1 ${n} = ? 台幣):`);
                     }
                     
-                    if (r && !isNaN(parseFloat(r))) {
+                    if (r) {
                         if(!trip.customCurrencies) trip.customCurrencies = {};
                         trip.customCurrencies[n] = parseFloat(r);
                         lastSelectedCurrency = n;
+                        // 修正：立即呼叫 refreshAll 確保下拉選單重繪並自動選取新幣別
+                        refreshAll(); 
                         await setDoc(tripsRef, { trips: window.trips });
-                        // 修正：確保新增後立即重新渲染 UI
-                        refreshAll();
                     } else {
-                        el.value = lastSelectedCurrency;
+                        el.value = 'TWD';
                     }
                 } catch (error) {
                     const r = prompt(`連線失敗，請手動輸入匯率 (1 ${n} = ? 台幣):`);
-                    if (r && !isNaN(parseFloat(r))) {
+                    if (r) {
                         if(!trip.customCurrencies) trip.customCurrencies = {};
                         trip.customCurrencies[n] = parseFloat(r);
                         lastSelectedCurrency = n;
-                        await setDoc(tripsRef, { trips: window.trips });
                         refreshAll();
+                        await setDoc(tripsRef, { trips: window.trips });
                     } else {
-                        el.value = lastSelectedCurrency;
+                        el.value = 'TWD';
                     }
                 }
             } else {
@@ -508,7 +501,6 @@
             }
         };
 
-        // 其餘輔助函數 (保持不變)
         window.changeTheme = (t) => {
             document.body.className = `min-h-screen theme-${t}`;
             localStorage.setItem('user-theme', t);
@@ -541,7 +533,7 @@
             if (!name || !rawAmount) return alert("請填寫名稱與金額");
             if (window.selectedMembers.length === 0) return alert("請勾選分攤人員");
             
-            // 此處省略其餘 addRow 內容... 保持原樣
+            // 後續原有的 addRow 邏輯...
         };
     </script>
 </body>
