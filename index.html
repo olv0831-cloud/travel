@@ -43,7 +43,8 @@
             #addExpenseSection { max-height: none !important; }
         }
 
-        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: bold; }
+        /* (2) 修復外幣文字顏色與背景重疊問題 */
+        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: bold; color: #334155; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -122,10 +123,6 @@
                     <span class="text-[9px] text-white/30 italic">※ 若匯率留空則自動抓取即時匯率</span>
                 </div>
                 <div id="currencyManageList" class="flex flex-wrap gap-3"></div>
-            </div>
-            <div class="bg-white/5 rounded-2xl overflow-hidden">
-                <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
-                <div id="historyList" class="max-h-40 overflow-y-auto"></div>
             </div>
         </div>
     </header>
@@ -318,7 +315,6 @@
             await setDoc(tripsRef, { trips: window.trips });
         };
 
-        // 新增外幣邏輯 (手動輸入與自動抓取)
         window.addNewCurrencyManual = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const code = document.getElementById('newCurrencyCode').value.toUpperCase().trim();
@@ -351,6 +347,7 @@
             refreshAll();
         };
 
+        /* (1) 修復刪除貨幣函數名稱對應 */
         window.deleteCurrency = async (code) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (confirm(`確定要刪除 ${code} 及其匯率設定嗎？`)) {
@@ -384,7 +381,6 @@
                 </div>
             `).join('');
 
-            // 渲染外幣選單與管理列表
             const currencySelect = document.getElementById('currency');
             const currencyManageList = document.getElementById('currencyManageList');
             const savedCurrencies = trip.customCurrencies || {};
@@ -405,7 +401,6 @@
             currencySelect.value = lastSelectedCurrency || "TWD";
             currencyManageList.innerHTML = manageHtml || `<span class="text-white/20 text-[10px]">尚無自訂外幣</span>`;
             
-            // 更新匯率文字顯示
             const currentRate = parseFloat(currencySelect.options[currencySelect.selectedIndex]?.dataset.rate) || 1;
             document.getElementById('rateDisplay').innerText = `目前匯率: ${currentRate.toFixed(2)}`;
 
@@ -498,70 +493,59 @@
             renderMemberGrid(trip);
         };
 
-        window.changeTheme = (t) => {
-            document.body.className = `min-h-screen theme-${t}`;
-            localStorage.setItem('user-theme', t);
-        };
-
-        window.toggleTools = () => {
-            document.getElementById('toolPanel').classList.toggle('expanded');
-        };
-
-        window.switchTrip = (id) => {
-            window.currentTripId = id;
-            localStorage.setItem('current_trip_id', id);
-            refreshAll();
-        };
-
-        window.getIcon = (cat) => {
-            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
-            return icons[cat] || '📦';
-        };
-
+        /* (3) 修復新增消費無法成功問題 (邏輯補全) */
         window.addRow = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const name = document.getElementById('itemName').value;
             const rawAmount = parseFloat(document.getElementById('amount').value);
             const currencyEl = document.getElementById('currency');
+            const code = currencyEl.value;
             const rate = parseFloat(currencyEl.options[currencyEl.selectedIndex].dataset.rate) || 1;
             const payer = document.getElementById('payer').value;
-            const category = document.getElementById('category').value;
+            
+            if (!name || isNaN(rawAmount) || window.selectedMembers.length === 0) {
+                return alert("請填寫完整項目名稱、金額並至少選擇一位分攤人員");
+            }
 
-            if (!name || !rawAmount) return alert("請填寫名稱與金額");
-            if (window.selectedMembers.length === 0) return alert("請勾選分攤人員");
-
-            const finalTWDAmount = rawAmount * rate;
+            const amountTWD = rawAmount * rate;
+            const now = new Date();
+            const dateStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
             const newItem = {
                 id: Date.now(),
-                name,
-                amount: finalTWDAmount,
-                payer,
-                category,
-                date: new Date().toLocaleDateString(),
+                name: name,
+                category: document.getElementById('category').value,
+                amount: amountTWD,
+                payer: payer,
                 participants: [...window.selectedMembers],
-                rateInfo: rate !== 1 ? `(${rawAmount} ${currencyEl.value} x ${rate})` : ""
+                date: dateStr,
+                rateInfo: code !== 'TWD' ? `(${rawAmount} ${code} @ ${rate})` : ""
             };
 
             if (window.isCustomSplit) {
                 newItem.customAmounts = {};
-                let totalInput = 0;
+                let totalCustom = 0;
                 document.querySelectorAll('.custom-amt').forEach(input => {
                     const val = parseFloat(input.value) || 0;
-                    newItem.customAmounts[input.dataset.name] = val * rate;
-                    totalInput += val;
+                    newItem.customAmounts[input.dataset.name] = val;
+                    totalCustom += val;
                 });
-                if (Math.abs(totalInput - rawAmount) > 0.1) return alert("自訂金額總和與輸入總額不符！");
+                if (Math.abs(totalCustom - amountTWD) > 1) {
+                    if (!confirm(`手動金額總和 (${totalCustom}) 與消費金額 (${fmt(amountTWD)}) 不符，是否繼續？`)) return;
+                }
             }
 
             if(!trip.data) trip.data = [];
             trip.data.push(newItem);
             await setDoc(tripsRef, { trips: window.trips });
+
+            // 清空輸入
             document.getElementById('itemName').value = "";
             document.getElementById('amount').value = "";
         };
 
         window.deleteExpense = async (id) => {
-            if(!confirm("確定刪除此筆消費？")) return;
+            if(!confirm("確定要刪除這筆紀錄？")) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             trip.data = trip.data.filter(d => d.id !== id);
             await setDoc(tripsRef, { trips: window.trips });
@@ -574,77 +558,61 @@
             renderMemberGrid(trip);
         };
 
-        Chart.register(ChartDataLabels);
         function updateChart(stats) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
-            const data = Object.values(stats).filter(v => v > 0);
-            const labels = Object.keys(stats).filter(k => stats[k] > 0);
-            
+            const data = Object.values(stats);
+            const labels = Object.keys(stats).map((l, i) => data[i] > 0 ? l : null).filter(l => l);
+            const filteredData = data.filter(v => v > 0);
+
             if (chartInstance) chartInstance.destroy();
+            if (filteredData.length === 0) return;
+
             chartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
-                        data: data,
-                        backgroundColor: ['#f87171', '#fb923c', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa'],
+                        data: filteredData,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#94a3b8'],
                         borderWidth: 0
                     }]
                 },
                 options: {
                     plugins: { 
                         legend: { display: false },
-                        datalabels: {
-                            color: '#fff',
-                            font: { weight: 'bold', size: 10 },
-                            formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex]
-                        }
+                        datalabels: { color: '#fff', font: { weight: 'bold', size: 10 }, formatter: (v, ctx) => ctx.chart.data.labels[ctx.dataIndex] }
                     },
                     cutout: '70%'
-                }
+                },
+                plugins: [ChartDataLabels]
             });
-            
-            let breakdownHtml = "";
-            Object.keys(stats).forEach((cat, i) => {
-                if(stats[cat] > 0) {
-                    breakdownHtml += `
-                        <div class="flex justify-between items-center text-[10px]">
-                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${chartInstance.data.datasets[0].backgroundColor[i]}"></span>${cat}</span>
-                            <span class="font-bold">$${fmt(stats[cat])}</span>
-                        </div>`;
-                }
-            });
-            document.getElementById('categoryBreakdown').innerHTML = breakdownHtml;
         }
 
         function calculateAdvice(balances) {
-            let payers = [], receivers = [];
-            Object.keys(balances).forEach(name => {
-                if (balances[name] > 0.5) receivers.push({ name, amt: balances[name] });
-                else if (balances[name] < -0.5) payers.push({ name, amt: -balances[name] });
-            });
-            
-            let adviceHtml = "";
-            receivers.sort((a,b) => b.amt - a.amt);
-            payers.sort((a,b) => b.amt - a.amt);
-            
-            let i = 0, j = 0;
-            while(i < payers.length && j < receivers.length) {
-                let pay = payers[i], receive = receivers[j];
-                let settle = Math.min(pay.amt, receive.amt);
+            let pay = [], receive = [];
+            for (let name in balances) {
+                if (balances[name] > 0.5) receive.push({ name, amt: balances[name] });
+                else if (balances[name] < -0.5) pay.push({ name, amt: Math.abs(balances[name]) });
+            }
+            receive.sort((a,b) => b.amt - a.amt);
+            pay.sort((a,b) => b.amt - a.amt);
+
+            let adviceHtml = "", i = 0, j = 0;
+            while (i < pay.length && j < receive.length) {
+                let settle = Math.min(pay[i].amt, receive[j].amt);
                 adviceHtml += `
-                    <div class="bg-white p-3 rounded-2xl border border-blue-100 flex items-center justify-between shadow-sm">
-                        <div class="flex items-center gap-2">
-                            <div class="text-xs font-bold text-slate-700">${pay.name}</div>
-                            <i class="fa-solid fa-arrow-right text-blue-300 text-[10px]"></i>
-                            <div class="text-xs font-bold text-slate-700">${receive.name}</div>
+                    <div class="bg-white p-3 rounded-2xl border shadow-sm flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="text-xs font-bold text-red-500">${pay[i].name}</div>
+                            <i class="fa-solid fa-arrow-right text-gray-300 text-[10px]"></i>
+                            <div class="text-xs font-bold text-slate-700">${receive[j].name}</div>
                         </div>
                         <div class="text-sm font-black text-blue-600">$${fmt(settle)}</div>
                     </div>`;
-                pay.amt -= settle;
-                receive.amt -= settle;
-                if (pay.amt <= 0.5) i++;
-                if (receive.amt <= 0.5) j++;
+                pay[i].amt -= settle;
+                receive[j].amt -= settle;
+                if (pay[i].amt <= 0.5) i++;
+                if (receive[j].amt <= 0.5) j++;
             }
             document.getElementById('settlementAdvice').innerHTML = adviceHtml || '<p class="text-xs text-gray-400">目前帳目平衡，不需轉帳。</p>';
         }
@@ -669,8 +637,17 @@
             if(!confirm("確定要刪除整個專案？這動作無法復原！")) return;
             window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
             await setDoc(tripsRef, { trips: window.trips });
-            window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
-            refreshAll();
+            if (window.trips.length > 0) window.switchTrip(window.trips[0].id);
+        };
+        
+        window.getIcon = (cat) => {
+            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
+            return icons[cat] || '📦';
+        };
+
+        window.changeTheme = (t) => {
+            document.body.className = `min-h-screen theme-${t}`;
+            localStorage.setItem('user-theme', t);
         };
     </script>
 </body>
