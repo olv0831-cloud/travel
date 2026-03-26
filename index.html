@@ -19,7 +19,6 @@
         .expanded { max-height: 1200px; }
         .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #334155; }
         
-        /* 頭像選擇器彈窗 */
         #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .avatar-option { width: 50px; height: 50px; cursor: pointer; border-radius: 50%; border: 2px solid transparent; }
         .avatar-option:hover { border-color: #3b82f6; }
@@ -73,12 +72,12 @@
             <div>
                 <h1 id="tripTitle" contenteditable="true" onblur="updateTripName()" class="text-2xl font-black p-1 rounded hover:bg-white/10">載入中...</h1>
                 <p class="text-[10px] text-white/50 mt-1">
-                    <i class="fa-brands fa-google mr-1"></i>匯率基準：Google Finance (0.20) 
+                    <i class="fa-brands fa-google mr-1"></i>匯率基準：Google Finance
                     <a href="https://www.google.com/search?q=JPY+to+TWD" target="_blank" class="text-blue-400 underline ml-1 font-bold">點此查詢最新</a>
                 </p>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/30 transition-colors">工具與人員設定 (A)</button>
+                <button onclick="toggleTools()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/30 transition-colors">工具與人員設定</button>
             </div>
         </div>
         <div id="toolPanel" class="max-w-7xl mx-auto collapsible-content mt-4 space-y-4">
@@ -128,7 +127,7 @@
                     <div class="flex border rounded-xl overflow-hidden">
                         <select id="currency" onchange="checkNewCurrency(this)" class="bg-gray-50 px-3 text-xs font-bold border-r">
                             <option value="TWD" data-rate="1">TWD</option>
-                            <option value="JPY" data-rate="0.2">JPY</option>
+                            <option value="JPY" data-rate="0.21">JPY</option>
                             <option value="NEW">+ 新增外幣</option>
                         </select>
                         <input id="amount" type="number" placeholder="金額" class="flex-1 p-3 outline-none font-bold text-sm">
@@ -196,7 +195,6 @@
         const db = getFirestore(app);
         const tripsRef = doc(db, "travelData", "master_record");
         
-        // 預設頭像清單
         const AVATARS = [
             'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', 'https://cdn-icons-png.flaticon.com/512/1999/1999625.png', 'https://cdn-icons-png.flaticon.com/512/236/236831.png', 'https://cdn-icons-png.flaticon.com/512/4139/4139981.png',
             'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 'https://cdn-icons-png.flaticon.com/512/194/194938.png', 'https://cdn-icons-png.flaticon.com/512/6997/6997662.png', 'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', 'https://cdn-icons-png.flaticon.com/512/1154/1154444.png'
@@ -218,7 +216,6 @@
             }
         });
 
-        // (1) 修復專案名稱修改功能
         window.updateTripName = async () => {
             const newName = document.getElementById('tripTitle').innerText.trim();
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
@@ -228,7 +225,6 @@
             }
         };
 
-        // (2) 頭像相關功能
         window.openAvatarPicker = (index) => {
             currentEditingMemberIdx = index;
             document.getElementById('avatarPicker').style.display = 'block';
@@ -245,7 +241,6 @@
             }
         };
 
-        // (3) 成員管理：新增、刪除、改名
         window.addMember = async () => {
             const name = prompt("請輸入新成員姓名:");
             if (!name) return;
@@ -267,8 +262,6 @@
             const oldName = trip.members[index].name;
             const newName = prompt("請修改成員姓名:", oldName);
             if (!newName || newName === oldName) return;
-            
-            // 同步修改消費紀錄中的人名
             trip.data.forEach(item => {
                 if (item.payer === oldName) item.payer = newName;
                 const pIdx = item.participants.indexOf(oldName);
@@ -292,7 +285,6 @@
             if (!trip.members) trip.members = [{name: 'Paul', photo: AVATARS[0]}];
             document.getElementById('payer').innerHTML = trip.members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             
-            // 渲染管理面板成員清單
             document.getElementById('memberManageList').innerHTML = trip.members.map((m, i) => `
                 <div class="flex items-center gap-2 bg-white/10 p-2 rounded-xl">
                     <img src="${m.photo}" class="avatar" onclick="openAvatarPicker(${i})" title="點擊更換頭像">
@@ -332,7 +324,8 @@
                         balances[m.name] -= cost;
                         oweSum[m.name] += cost;
                     }
-                    return `<td class="p-4 text-center ${cost > 0 ? 'text-blue-600 font-bold' : 'text-gray-200'}">${cost > 0 ? Math.round(cost) : '-'}</td>`;
+                    // 修改處 (2): 數字加上千分位
+                    return `<td class="p-4 text-center ${cost > 0 ? 'text-blue-600 font-bold' : 'text-gray-200'}">${cost > 0 ? fmt(cost) : '-'}</td>`;
                 }).join('');
 
                 return `<tr>
@@ -368,7 +361,6 @@
             calculateAdvice(balances);
         };
 
-        // 其它原有功能保持不變...
         window.exportToCSV = () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (!trip || !trip.data.length) return alert("尚無消費資料可匯出");
@@ -423,16 +415,40 @@
             document.querySelectorAll('.individual-share').forEach(el => el.innerText = `~$${fmt(avg)}`);
         };
 
-        window.checkNewCurrency = (el) => {
+        // 修改處 (1): 自動搜尋匯率
+        window.checkNewCurrency = async (el) => {
             if (el.value === 'NEW') {
-                const n = prompt("輸入外幣名稱 (如: USD):");
-                const r = prompt("輸入匯率 (1 外幣 = ? 台幣):");
-                if (n && r) {
-                    const opt = document.createElement('option');
-                    opt.value = n; opt.text = n; opt.dataset.rate = r;
-                    el.add(opt, el.options[el.options.length - 1]);
-                    el.value = n;
-                } else el.value = 'TWD';
+                const n = prompt("輸入外幣代碼 (如: USD, HKD, KRW):")?.toUpperCase();
+                if (!n) { el.value = 'TWD'; return; }
+                
+                try {
+                    // 使用免費匯率 API 自動搜尋當下匯率 (相對於 TWD)
+                    const response = await fetch(`https://open.er-api.com/v6/latest/${n}`);
+                    const data = await response.json();
+                    
+                    let r;
+                    if (data && data.rates && data.rates['TWD']) {
+                        r = data.rates['TWD'];
+                        alert(`已自動搜尋匯率：1 ${n} = ${r.toFixed(4)} TWD`);
+                    } else {
+                        r = prompt(`無法自動獲取匯率，請手動輸入 (1 ${n} = ? 台幣):`);
+                    }
+
+                    if (r) {
+                        const opt = document.createElement('option');
+                        opt.value = n; opt.text = n; opt.dataset.rate = r;
+                        el.add(opt, el.options[el.options.length - 1]);
+                        el.value = n;
+                    } else el.value = 'TWD';
+                } catch (error) {
+                    const r = prompt(`搜尋失敗，請手動輸入匯率 (1 ${n} = ? 台幣):`);
+                    if (r) {
+                        const opt = document.createElement('option');
+                        opt.value = n; opt.text = n; opt.dataset.rate = r;
+                        el.add(opt, el.options[el.options.length - 1]);
+                        el.value = n;
+                    } else el.value = 'TWD';
+                }
             }
             document.getElementById('rateDisplay').innerText = `目前匯率: ${parseFloat(el.options[el.selectedIndex].dataset.rate).toFixed(2)}`;
             updateLiveShares();
@@ -540,45 +556,74 @@
         window.deleteExpense = async (id) => {
             if (!confirm("確定刪除此筆消費？")) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            trip.history.unshift({ time: new Date().toLocaleTimeString(), action: "刪除消費項目", data: JSON.parse(JSON.stringify(trip.data)), members: JSON.parse(JSON.stringify(trip.members)) });
             trip.data = trip.data.filter(d => d.id !== id);
             await setDoc(tripsRef, { trips: window.trips });
         };
 
-        window.restoreHistory = async (i) => {
+        window.restoreHistory = async (idx) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const target = trip.history[i];
-            trip.data = target.data;
-            trip.members = target.members;
+            const record = trip.history[idx];
+            trip.data = record.data;
+            trip.members = record.members;
+            trip.history.splice(0, idx + 1);
             await setDoc(tripsRef, { trips: window.trips });
         };
 
-        function calculateAdvice(balances) {
-            let debtors = [], creditors = [];
-            for (let name in balances) {
-                if (balances[name] < -1) debtors.push({ name, amt: Math.abs(balances[name]) });
-                else if (balances[name] > 1) creditors.push({ name, amt: balances[name] });
-            }
-            let advice = [];
-            while (debtors.length && creditors.length) {
-                let d = debtors[0], c = creditors[0], settle = Math.min(d.amt, c.amt);
-                advice.push(`<div class="flex items-center justify-between text-[11px] p-3 bg-white rounded-xl border border-blue-100 shadow-sm">
-                    <span><b>${d.name}</b> <i class="fa-solid fa-arrow-right mx-2 text-blue-300"></i> <b>${c.name}</b></span>
-                    <span class="font-black text-blue-600">$${fmt(settle)}</span>
-                </div>`);
-                d.amt -= settle; c.amt -= settle;
-                if (d.amt <= 1) debtors.shift(); if (c.amt <= 1) creditors.shift();
-            }
-            document.getElementById('settlementAdvice').innerHTML = advice.length ? advice.join('') : '<p class="text-xs text-gray-400">目前帳目已平衡</p>';
-        }
+        window.switchTrip = (id) => {
+            window.currentTripId = id;
+            localStorage.setItem('current_trip_id', id);
+            refreshAll();
+        };
+
+        window.createNewTrip = async () => {
+            const name = prompt("請輸入新分帳計畫名稱:");
+            if (!name) return;
+            const newTrip = { id: Date.now(), name: name, members: [{name: 'Paul', photo: AVATARS[0]}], data: [], history: [] };
+            window.trips.push(newTrip);
+            window.currentTripId = newTrip.id;
+            localStorage.setItem('current_trip_id', newTrip.id);
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.toggleTools = () => {
+            document.getElementById('toolPanel').classList.toggle('expanded');
+        };
 
         function getIcon(cat) {
             const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
             return icons[cat] || '📦';
         }
 
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
-        document.getElementById('amount').addEventListener('input', updateLiveShares);
+        function calculateAdvice(balances) {
+            let payers = [], receivers = [];
+            for (let name in balances) {
+                if (balances[name] > 1) receivers.push({ name, amt: balances[name] });
+                else if (balances[name] < -1) payers.push({ name, amt: -balances[name] });
+            }
+            receivers.sort((a, b) => b.amt - a.amt);
+            payers.sort((a, b) => b.amt - a.amt);
+
+            let advice = [];
+            let i = 0, j = 0;
+            while (i < payers.length && j < receivers.length) {
+                let pay = payers[i], recv = receivers[j];
+                let settle = Math.min(pay.amt, recv.amt);
+                advice.push(`<div class="bg-white p-3 rounded-xl border-l-4 border-blue-500 shadow-sm flex justify-between items-center">
+                    <span class="font-bold text-xs">${pay.name} ⮕ ${recv.name}</span>
+                    <span class="text-blue-600 font-black text-sm">$${fmt(settle)}</span>
+                </div>`);
+                pay.amt -= settle; recv.amt -= settle;
+                if (pay.amt <= 1) i++;
+                if (recv.amt <= 1) j++;
+            }
+            document.getElementById('settlementAdvice').innerHTML = advice.length ? advice.join('') : '<p class="text-gray-400 text-xs italic">目前暫無轉帳建議</p>';
+        }
+
+        // 初始化佈景
+        const savedTheme = localStorage.getItem('user-theme') || 'classic';
+        changeTheme(savedTheme);
+
     </script>
 </body>
 </html>
