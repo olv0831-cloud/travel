@@ -269,13 +269,13 @@
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const target = trip.history[index];
             
-            // 重要：還原內容並立即更新 Firebase
+            // 修正 (3)：將還原內容寫回 trip 物件並推送到 Firebase
             trip.data = JSON.parse(JSON.stringify(target.data));
             trip.members = JSON.parse(JSON.stringify(target.members));
             trip.customCurrencies = JSON.parse(JSON.stringify(target.customCurrencies));
             
             await setDoc(tripsRef, { trips: window.trips });
-            alert("已成功還原！");
+            alert("已還原版本！");
         };
 
         window.toggleAddExpenseMobile = () => {
@@ -371,16 +371,15 @@
                 }
             }
 
+            // 修正 (1) & (2)：確保寫回 trip 並推送到 Firebase，觸發 refreshAll
             if(!trip.customCurrencies) trip.customCurrencies = {};
             trip.customCurrencies[code] = rate;
             
-            lastSelectedCurrency = code;
+            lastSelectedCurrency = code; // 設定為當前選中，以便新增後立即出現在 (2)
             codeInput.value = "";
             rateInput.value = "";
             
-            // 重要：修正不更新 Firebase 的問題
             await saveHistory(trip, `新增幣別: ${code}`);
-            refreshAll();
         };
 
         window.deleteCurrency = async (code) => {
@@ -389,7 +388,6 @@
                 delete trip.customCurrencies[code];
                 if(lastSelectedCurrency === code) lastSelectedCurrency = "TWD";
                 await saveHistory(trip, `刪除幣別: ${code}`);
-                refreshAll();
             }
         };
 
