@@ -17,7 +17,7 @@
         .avatar:hover { transform: scale(1.1); }
         .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
         .expanded { max-height: 1200px; }
-        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #334155; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #cbd5e1; }
         
         #avatarPicker { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .avatar-option { width: 50px; height: 50px; cursor: pointer; border-radius: 50%; border: 2px solid transparent; }
@@ -43,7 +43,7 @@
             #addExpenseSection { max-height: none !important; }
         }
 
-        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: bold; }
+        .currency-manage-item { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: bold; color: white; border: 1px solid rgba(255,255,255,0.1); }
     </style>
 </head>
 <body class="min-h-screen">
@@ -124,7 +124,7 @@
                 <div id="currencyManageList" class="flex flex-wrap gap-3"></div>
             </div>
             <div class="bg-white/5 rounded-2xl overflow-hidden">
-                <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄 (可還原)</p>
+                <p class="p-3 text-[10px] font-bold text-white/40 border-b border-white/10 uppercase">編輯歷史紀錄</p>
                 <div id="historyList" class="max-h-40 overflow-y-auto"></div>
             </div>
         </div>
@@ -250,6 +250,32 @@
             }
         });
 
+        // 輔助函式：保存歷史紀錄
+        const saveHistory = async (trip, actionName) => {
+            if(!trip.history) trip.history = [];
+            const snapshot = {
+                timestamp: new Date().toLocaleString(),
+                action: actionName,
+                data: JSON.parse(JSON.stringify(trip.data || [])),
+                members: JSON.parse(JSON.stringify(trip.members || [])),
+                customCurrencies: JSON.parse(JSON.stringify(trip.customCurrencies || {}))
+            };
+            trip.history.unshift(snapshot);
+            if(trip.history.length > 20) trip.history.pop();
+            await setDoc(tripsRef, { trips: window.trips });
+        };
+
+        window.restoreHistory = async (index) => {
+            if(!confirm("確定要還原到此版本嗎？當前未存檔的變動將遺失。")) return;
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const target = trip.history[index];
+            trip.data = target.data;
+            trip.members = target.members;
+            trip.customCurrencies = target.customCurrencies;
+            await setDoc(tripsRef, { trips: window.trips });
+            alert("已成功還原！");
+        };
+
         window.toggleAddExpenseMobile = () => {
             if (window.innerWidth <= 768) {
                 document.getElementById('addExpenseSection').classList.toggle('active');
@@ -287,15 +313,16 @@
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if(!trip.members) trip.members = [];
             trip.members.push({ name: name, photo: AVATARS[0] });
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveHistory(trip, `新增成員: ${name}`);
         };
 
         window.deleteMember = async (index) => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip.members.length <= 1) return alert("至少需保留一位成員");
-            if (!confirm(`確定要移除成員 ${trip.members[index].name} 嗎？`)) return;
+            const name = trip.members[index].name;
+            if (!confirm(`確定要移除成員 ${name} 嗎？`)) return;
             trip.members.splice(index, 1);
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveHistory(trip, `刪除成員: ${name}`);
         };
 
         window.renameMember = async (index) => {
@@ -315,10 +342,9 @@
                 }
             });
             trip.members[index].name = newName;
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveHistory(trip, `將 ${oldName} 改名為 ${newName}`);
         };
 
-        // 新增外幣邏輯 (手動輸入與自動抓取)
         window.addNewCurrencyManual = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const code = document.getElementById('newCurrencyCode').value.toUpperCase().trim();
@@ -344,10 +370,10 @@
             if(!trip.customCurrencies) trip.customCurrencies = {};
             trip.customCurrencies[code] = rate;
             
-            await setDoc(tripsRef, { trips: window.trips });
+            lastSelectedCurrency = code;
+            await saveHistory(trip, `新增幣別: ${code}`);
             document.getElementById('newCurrencyCode').value = "";
             document.getElementById('newCurrencyRate').value = "";
-            lastSelectedCurrency = code;
             refreshAll();
         };
 
@@ -355,7 +381,8 @@
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (confirm(`確定要刪除 ${code} 及其匯率設定嗎？`)) {
                 delete trip.customCurrencies[code];
-                await setDoc(tripsRef, { trips: window.trips });
+                if(lastSelectedCurrency === code) lastSelectedCurrency = "TWD";
+                await saveHistory(trip, `刪除幣別: ${code}`);
                 refreshAll();
             }
         };
@@ -384,7 +411,6 @@
                 </div>
             `).join('');
 
-            // 渲染外幣選單與管理列表
             const currencySelect = document.getElementById('currency');
             const currencyManageList = document.getElementById('currencyManageList');
             const savedCurrencies = trip.customCurrencies || {};
@@ -393,6 +419,7 @@
             let manageHtml = "";
             
             Object.keys(savedCurrencies).forEach(code => {
+                if(code === "0" || code === "[object Object]") return;
                 optionsHtml += `<option value="${code}" data-rate="${savedCurrencies[code]}">${code}</option>`;
                 manageHtml += `
                     <div class="currency-manage-item">
@@ -405,9 +432,19 @@
             currencySelect.value = lastSelectedCurrency || "TWD";
             currencyManageList.innerHTML = manageHtml || `<span class="text-white/20 text-[10px]">尚無自訂外幣</span>`;
             
-            // 更新匯率文字顯示
             const currentRate = parseFloat(currencySelect.options[currencySelect.selectedIndex]?.dataset.rate) || 1;
             document.getElementById('rateDisplay').innerText = `目前匯率: ${currentRate.toFixed(2)}`;
+
+            // 渲染歷史紀錄
+            document.getElementById('historyList').innerHTML = (trip.history || []).map((h, i) => `
+                <div class="history-item">
+                    <div class="flex flex-col">
+                        <span class="font-bold text-white/80">${h.action}</span>
+                        <span class="opacity-40" style="font-size: 9px;">${h.timestamp}</span>
+                    </div>
+                    <button onclick="restoreHistory(${i})" class="bg-blue-600/50 hover:bg-blue-500 px-2 py-1 rounded text-[9px] text-white">還原</button>
+                </div>
+            `).join('');
 
             renderMemberGrid(trip);
 
@@ -523,6 +560,7 @@
             const name = document.getElementById('itemName').value;
             const rawAmount = parseFloat(document.getElementById('amount').value);
             const currencyEl = document.getElementById('currency');
+            const currencyCode = currencyEl.value;
             const rate = parseFloat(currencyEl.options[currencyEl.selectedIndex].dataset.rate) || 1;
             const payer = document.getElementById('payer').value;
             const category = document.getElementById('category').value;
@@ -539,7 +577,7 @@
                 category,
                 date: new Date().toLocaleDateString(),
                 participants: [...window.selectedMembers],
-                rateInfo: rate !== 1 ? `(${rawAmount} ${currencyEl.value} x ${rate})` : ""
+                rateInfo: rate !== 1 ? `(${rawAmount} ${currencyCode} x ${rate})` : ""
             };
 
             if (window.isCustomSplit) {
@@ -555,7 +593,10 @@
 
             if(!trip.data) trip.data = [];
             trip.data.push(newItem);
-            await setDoc(tripsRef, { trips: window.trips });
+            
+            lastSelectedCurrency = currencyCode; // 鎖定目前使用的幣別
+            await saveHistory(trip, `新增消費: ${name}`);
+            
             document.getElementById('itemName').value = "";
             document.getElementById('amount').value = "";
         };
@@ -563,8 +604,9 @@
         window.deleteExpense = async (id) => {
             if(!confirm("確定刪除此筆消費？")) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            const item = trip.data.find(d => d.id === id);
             trip.data = trip.data.filter(d => d.id !== id);
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveHistory(trip, `刪除消費: ${item ? item.name : '未知項目'}`);
         };
 
         window.toggleSplitMode = () => {
