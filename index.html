@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Paul的分帳神器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -242,7 +242,6 @@
             window.changeTheme(savedTheme);
         });
 
-        // 監聽雲端資料
         onSnapshot(tripsRef, (docSnap) => {
             if (docSnap.exists()) {
                 window.trips = docSnap.data().trips || [];
@@ -363,7 +362,6 @@
             await saveHistory(trip, `將 ${oldName} 改名為 ${newName}`);
         };
 
-        // (1) 新增與刪除幣別功能 (不自動抓取)
         window.addNewCurrencyManual = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const codeInput = document.getElementById('newCurrencyCode');
@@ -393,7 +391,6 @@
             }
         };
 
-        // (2) 更新匯率按鈕功能
         window.refreshAllExchangeRates = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const codes = Object.keys(trip.customCurrencies || {});
@@ -521,121 +518,165 @@
 
             document.getElementById('totalSpent').innerText = `$${fmt(totalTWD)}`;
             
+            // 修改點 (1)：在個人統計處代入人員的 icon (img 標籤)
             document.getElementById('balanceSummaryList').innerHTML = trip.members.map(m => `
-                <div class="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-black text-xs text-slate-700">${m.name}</span>
-                        <span class="text-[10px] font-bold ${balances[m.name] >= 0 ? 'text-green-600' : 'text-red-600'}">差額: ${balances[m.name] >= 0 ? '+' : ''}${fmt(balances[m.name])}</span>
+                <div class="bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center gap-3">
+                    <img src="${m.photo}" class="w-10 h-10 rounded-full border border-gray-200 shadow-sm">
+                    <div class="flex-1">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-black text-xs text-slate-700">${m.name}</span>
+                            <span class="text-[10px] font-bold ${balances[m.name] >= 0 ? 'text-green-600' : 'text-red-600'}">差額: ${balances[m.name] >= 0 ? '+' : ''}${fmt(balances[m.name])}</span>
+                        </div>
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-gray-400">代付: <b class="text-emerald-500">$${fmt(paidSum[m.name])}</b></span>
+                            <span class="text-gray-400">應付: <b class="text-red-400">$${fmt(oweSum[m.name])}</b></span>
+                        </div>
                     </div>
-                    <div class="flex justify-between text-[10px]">
-                        <span class="text-gray-400">代付: <b class="text-emerald-500">$${fmt(paidSum[m.name])}</b></span>
-                        <span class="text-gray-400">應付: <b class="text-rose-400">$${fmt(oweSum[m.name])}</b></span>
-                    </div>
-                </div>`).join('');
+                </div>
+            `).join('');
 
             updateChart(catStats);
-            calculateAdvice(balances);
+            updateSettlement(balances, trip.members);
+            updateCategoryBreakdown(catStats, totalTWD);
         };
 
-        // 以下為原始未變動功能 ... (省略部分未改動之渲染邏輯)
-        window.toggleTools = () => document.getElementById('toolPanel').classList.toggle('expanded');
-        window.changeTheme = (t) => { document.body.className = `min-h-screen theme-${t}`; localStorage.setItem('user-theme', t); };
-        window.switchTrip = (id) => { window.currentTripId = id; localStorage.setItem('current_trip_id', id); refreshAll(); };
-        const getIcon = (cat) => ({'餐飲':'🍽️','購物':'🛍️','娛樂':'🎡','住宿':'🏨','交通':'🚗','其它':'📦'}[cat] || '📦');
+        function getIcon(cat) {
+            const icons = { '餐飲': '🍽️', '購物': '🛍️', '娛樂': '🎡', '住宿': '🏨', '交通': '🚗', '其它': '📦' };
+            return icons[cat] || '📦';
+        }
 
-        window.renderMemberGrid = (trip) => {
+        function renderMemberGrid(trip) {
             const grid = document.getElementById('memberCheckGrid');
-            if(!window.selectedMembers || window.selectedMembers.length === 0) { window.selectedMembers = trip.members.map(m => m.name); }
             grid.innerHTML = trip.members.map(m => `
-                <div class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100" onclick="toggleMemberSelect('${m.name}')">
-                    <input type="checkbox" ${window.selectedMembers.includes(m.name) ? 'checked' : ''} class="w-4 h-4 rounded">
-                    <span class="text-xs font-bold">${m.name}</span>
-                    ${window.isCustomSplit && window.selectedMembers.includes(m.name) ? `<input type="number" placeholder="金額" class="custom-amt-input w-20 p-1 border rounded text-[10px]" onclick="event.stopPropagation()" data-member="${m.name}">` : ''}
-                </div>`).join('');
-        };
+                <div onclick="toggleMemberSelect('${m.name}')" id="btn-${m.name}" class="member-btn flex items-center gap-2 px-4 py-2 rounded-xl border-2 cursor-pointer transition-all ${window.selectedMembers.includes(m.name) ? 'border-blue-500 bg-blue-50 text-blue-600 font-bold' : 'border-gray-100 text-gray-400'}">
+                    <img src="${m.photo}" class="w-5 h-5 rounded-full">
+                    <span class="text-xs">${m.name}</span>
+                    ${window.isCustomSplit && window.selectedMembers.includes(m.name) ? `<input type="number" placeholder="金額" class="w-16 ml-2 p-1 border rounded text-[10px] custom-amt-input" onclick="event.stopPropagation()" data-name="${m.name}">` : ''}
+                </div>
+            `).join('');
+        }
 
         window.toggleMemberSelect = (name) => {
             const idx = window.selectedMembers.indexOf(name);
-            if (idx > -1) window.selectedMembers.splice(idx, 1); else window.selectedMembers.push(name);
-            renderMemberGrid(window.trips.find(t => String(t.id) === String(window.currentTripId)));
+            if (idx > -1) window.selectedMembers.splice(idx, 1);
+            else window.selectedMembers.push(name);
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            renderMemberGrid(trip);
+        };
+
+        window.toggleSplitMode = () => {
+            window.isCustomSplit = !window.isCustomSplit;
+            document.getElementById('splitModeBtn').innerText = window.isCustomSplit ? '切換平均分攤' : '切換手動指定金額';
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            renderMemberGrid(trip);
         };
 
         window.addRow = async () => {
-            const name = document.getElementById('itemName').value;
-            const amountStr = document.getElementById('amount').value;
-            if (!name || !amountStr) return alert("請輸入完整資料");
+            const item = document.getElementById('itemName').value;
+            const amountVal = parseFloat(document.getElementById('amount').value);
+            const payer = document.getElementById('payer').value;
+            const cat = document.getElementById('category').value;
+            const currencyEl = document.getElementById('currency');
+            const currencyCode = currencyEl.value;
+            const rate = parseFloat(currencyEl.options[currencyEl.selectedIndex].dataset.rate) || 1;
 
+            if (!item || !amountVal || window.selectedMembers.length === 0) return alert("請填寫完整資訊並選擇分攤人員");
+
+            const amountTWD = amountVal * rate;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const curEl = document.getElementById('currency');
-            const currencyCode = curEl.value;
-            const rate = parseFloat(curEl.options[curEl.selectedIndex].dataset.rate);
-            const rawAmount = parseFloat(amountStr);
-            const totalTWD = rawAmount * rate;
-
-            const newRow = {
-                id: Date.now(),
-                category: document.getElementById('category').value,
-                name: name,
-                payer: document.getElementById('payer').value,
-                amount: totalTWD,
-                participants: [...window.selectedMembers],
-                date: new Date().toLocaleDateString(),
-                rateInfo: currencyCode !== 'TWD' ? `(${rawAmount}${currencyCode} x ${rate})` : '',
-                customAmounts: null
-            };
-
+            
+            let customAmounts = null;
             if (window.isCustomSplit) {
-                newRow.customAmounts = {};
-                let checkSum = 0;
+                customAmounts = {};
+                let sum = 0;
                 document.querySelectorAll('.custom-amt-input').forEach(input => {
-                    const val = parseFloat(input.value) || 0;
-                    const valTWD = val * rate;
-                    newRow.customAmounts[input.dataset.member] = valTWD;
-                    checkSum += valTWD;
+                    const amt = parseFloat(input.value) || 0;
+                    const amtTWD = amt * rate;
+                    customAmounts[input.dataset.name] = amtTWD;
+                    sum += amt;
                 });
-                if (Math.abs(checkSum - totalTWD) > 2) return alert(`手動分攤總和 ($${checkSum}) 不等於輸入總金額 ($${totalTWD})`);
-            } else {
-                if (newRow.participants.length === 0) return alert("請選擇至少一位分攤人員");
+                if (Math.abs(sum - amountVal) > 1) return alert(`手動輸入總和 (${sum}) 與總金額 (${amountVal}) 不符`);
             }
 
-            trip.data.push(newRow);
-            await saveHistory(trip, `新增消費: ${name}`);
+            const newRecord = {
+                id: Date.now(),
+                name: item,
+                category: cat,
+                amount: amountTWD,
+                payer: payer,
+                participants: [...window.selectedMembers],
+                customAmounts: customAmounts,
+                date: new Date().toLocaleDateString(),
+                rateInfo: currencyCode !== 'TWD' ? `(${amountVal} ${currencyCode} @ ${rate})` : ''
+            };
+
+            trip.data.push(newRecord);
+            await saveHistory(trip, `新增消費: ${item}`);
+            
             document.getElementById('itemName').value = "";
             document.getElementById('amount').value = "";
+            window.selectedMembers = [];
+            renderMemberGrid(trip);
         };
 
         window.deleteExpense = async (id) => {
+            if (!confirm("確定刪除此筆記錄？")) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const target = trip.data.find(d => d.id === id);
-            if (confirm(`確定要刪除「${target.name}」這筆紀錄嗎？`)) {
-                trip.data = trip.data.filter(d => d.id !== id);
-                await saveHistory(trip, `刪除消費: ${target.name}`);
-            }
+            const record = trip.data.find(d => d.id === id);
+            trip.data = trip.data.filter(d => d.id !== id);
+            await saveHistory(trip, `刪除消費: ${record?.name}`);
         };
 
-        function calculateAdvice(balances) {
-            let pay = [], receive = [];
-            for (let name in balances) {
-                if (balances[name] < -0.5) pay.push({ name, amt: Math.abs(balances[name]) });
-                else if (balances[name] > 0.5) receive.push({ name, amt: balances[name] });
-            }
-            let i = 0, j = 0, adviceHtml = "";
-            while (i < pay.length && j < receive.length) {
-                let settle = Math.min(pay[i].amt, receive[j].amt);
-                adviceHtml += `
-                    <div class="bg-white p-3 rounded-2xl border border-blue-100 flex justify-between items-center shadow-sm">
-                        <div class="flex items-center gap-2">
-                            <div class="text-xs font-bold text-slate-700">${pay[i].name}</div>
-                            <i class="fa-solid fa-arrow-right text-blue-400 text-[10px]"></i>
-                            <div class="text-xs font-bold text-slate-700">${receive[j].name}</div>
-                        </div>
-                        <div class="text-sm font-black text-blue-600">$${fmt(settle)}</div>
-                    </div>`;
-                pay[i].amt -= settle; receive[j].amt -= settle;
-                if (pay[i].amt <= 0.5) i++; if (receive[j].amt <= 0.5) j++;
-            }
-            document.getElementById('settlementAdvice').innerHTML = adviceHtml || '<p class="text-xs text-gray-400">目前帳目平衡，不需轉帳。</p>';
-        }
+        window.switchTrip = (id) => {
+            window.currentTripId = id;
+            localStorage.setItem('current_trip_id', id);
+            refreshAll();
+        };
+
+        window.createNewTrip = async () => {
+            const name = prompt("請輸入新專案名稱 (如：日本 2026):");
+            if (!name) return;
+            const newTrip = {
+                id: Date.now(),
+                name: name,
+                members: [{ name: "Paul", photo: AVATARS[0] }],
+                data: [],
+                customCurrencies: {},
+                history: []
+            };
+            window.trips.push(newTrip);
+            await saveToCloud("建立新專案");
+            window.switchTrip(newTrip.id);
+        };
+
+        window.deleteTripBtn = async () => {
+            if(!confirm("確定要刪除整個專案？這動作無法復原！")) return;
+            window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
+            await saveToCloud("刪除專案");
+            if (window.trips.length > 0) window.switchTrip(window.trips[0].id);
+        };
+
+        window.changeTheme = (theme) => {
+            document.body.className = `min-h-screen theme-${theme}`;
+            localStorage.setItem('user-theme', theme);
+        };
+
+        window.toggleTools = () => {
+            document.getElementById('toolPanel').classList.toggle('expanded');
+        };
+
+        window.exportToCSV = () => {
+            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
+            let csv = "\uFEFF日期,類別,項目,付款人,總金額(TWD),分攤人員\n";
+            trip.data.forEach(d => {
+                csv += `${d.date},${d.category},${d.name},${d.payer},${d.amount},"${d.participants.join('/')}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${trip.name}_分帳報表.csv`;
+            link.click();
+        };
 
         function updateChart(stats) {
             const ctx = document.getElementById('expenseChart').getContext('2d');
@@ -645,45 +686,80 @@
                 type: 'doughnut',
                 data: {
                     labels: Object.keys(stats),
-                    datasets: [{ data, backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#6366f1','#94a3b8'], borderWeight: 0 }]
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#94a3b8'],
+                        borderWidth: 0
+                    }]
                 },
-                options: { cutout: '70%', plugins: { legend: { display: false }, datalabels: { display: false } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            font: { size: 10, weight: 'bold' },
+                            formatter: (value, ctx) => {
+                                let sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                return sum > 0 ? (value / sum * 100).toFixed(0) + '%' : '';
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                },
+                plugins: [ChartDataLabels]
             });
-            document.getElementById('categoryBreakdown').innerHTML = Object.entries(stats).map(([label, val], i) => 
-                val > 0 ? `<div class="flex justify-between text-[9px] font-bold"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full" style="background:${['#3b82f6','#10b981','#f59e0b','#ef4444','#6366f1','#94a3b8'][i]}"></span>${label}</span><span>$${fmt(val)}</span></div>` : ''
-            ).join('');
         }
 
-        window.createNewTrip = async () => {
-            const name = prompt("請輸入新專案名稱 (如：日本 2026):");
-            if (!name) return;
-            const newTrip = { id: Date.now(), name: name, members: [{ name: "Paul", photo: AVATARS[0] }], data: [], customCurrencies: {}, history: [] };
-            window.trips.push(newTrip);
-            await setDoc(tripsRef, { trips: window.trips });
-            window.switchTrip(newTrip.id);
-        };
+        function updateCategoryBreakdown(stats, total) {
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#94a3b8'];
+            document.getElementById('categoryBreakdown').innerHTML = Object.entries(stats).map(([cat, val], i) => {
+                if(val === 0) return '';
+                const perc = total > 0 ? (val / total * 100).toFixed(0) : 0;
+                return `<div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full" style="background:${colors[i]}"></div>
+                    <span class="text-[10px] font-bold opacity-70">${cat}</span>
+                    <span class="text-[10px] font-black ml-auto">$${fmt(val)} (${perc}%)</span>
+                </div>`;
+            }).join('');
+        }
 
-        window.deleteTripBtn = async () => {
-            if(!confirm("確定要刪除整個專案？這動作無法復原！")) return;
-            window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
-            await setDoc(tripsRef, { trips: window.trips });
-            if (window.trips.length > 0) window.switchTrip(window.trips[0].id); else window.location.reload();
-        };
+        function updateSettlement(balances, members) {
+            let payables = [], receivables = [];
+            for (let name in balances) {
+                if (balances[name] > 0.5) receivables.push({ name, amt: balances[name], photo: members.find(m => m.name === name).photo });
+                else if (balances[name] < -0.5) payables.push({ name, amt: Math.abs(balances[name]), photo: members.find(m => m.name === name).photo });
+            }
+            receivables.sort((a, b) => b.amt - a.amt);
+            payables.sort((a, b) => b.amt - a.amt);
 
-        window.exportToCSV = () => {
-            const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            let csv = "\uFEFF類別,項目,付款人,總額(TWD),日期,備註\n";
-            trip.data.forEach(item => csv += `${item.category},${item.name},${item.payer},${item.amount},${item.date},${item.rateInfo || ''}\n`);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob); link.download = `${trip.name}_支出報表.csv`; link.click();
-        };
-
-        window.toggleSplitMode = () => {
-            window.isCustomSplit = !window.isCustomSplit;
-            document.getElementById('splitModeBtn').innerText = window.isCustomSplit ? "切換回平均分攤" : "切換手動指定金額";
-            renderMemberGrid(window.trips.find(t => String(t.id) === String(window.currentTripId)));
-        };
+            let adviceHtml = "", i = 0, j = 0;
+            while (i < payables.length && j < receivables.length) {
+                let pay = payables[i], receive = receivables[j];
+                let settle = Math.min(pay.amt, receive.amt);
+                adviceHtml += `
+                    <div class="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-blue-100">
+                        <div class="flex items-center gap-2">
+                            <div class="text-center">
+                                <img src="${pay.photo}" class="w-8 h-8 rounded-full border mx-auto">
+                                <div class="text-[9px] font-bold text-slate-700">${pay.name}</div>
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-blue-300 mx-2"></i>
+                            <div class="text-center">
+                                <img src="${receive.photo}" class="w-8 h-8 rounded-full border mx-auto">
+                                <div class="text-[9px] font-bold text-slate-700">${receive.name}</div>
+                            </div>
+                        </div>
+                        <div class="text-sm font-black text-blue-600">$${fmt(settle)}</div>
+                    </div>`;
+                pay.amt -= settle;
+                receive.amt -= settle;
+                if (pay.amt <= 0.5) i++;
+                if (receive.amt <= 0.5) j++;
+            }
+            document.getElementById('settlementAdvice').innerHTML = adviceHtml || '<p class="text-xs text-gray-400">目前帳目平衡，不需轉帳。</p>';
+        }
     </script>
 </body>
 </html>
