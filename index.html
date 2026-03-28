@@ -215,7 +215,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCLz4iTnKXkba26S4fRUdV6d0DTZiRXSg0", authDomain: "travel-expense-7dbaa.firebaseapp.com", projectId: "travel-expense-7dbaa", storageBucket: "travel-expense-7dbaa.firebasestorage.app", messagingSenderId: "745263115640", appId: "1:745263115640:web:5714e2c1d041969ecaec8d" };
         const app = initializeApp(firebaseConfig);
@@ -242,6 +242,7 @@
             window.changeTheme(savedTheme);
         });
 
+        // 監聽雲端資料
         onSnapshot(tripsRef, (docSnap) => {
             if (docSnap.exists()) {
                 window.trips = docSnap.data().trips || [];
@@ -249,6 +250,11 @@
                 refreshAll();
             }
         });
+
+        const saveToCloud = async (actionName) => {
+            await setDoc(tripsRef, { trips: window.trips });
+            console.log("Cloud Saved:", actionName);
+        };
 
         const saveHistory = async (trip, actionName) => {
             if(!trip.history) trip.history = [];
@@ -261,22 +267,34 @@
             };
             trip.history.unshift(snapshot);
             if(trip.history.length > 20) trip.history.pop();
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveToCloud(actionName);
         };
 
+        // 修正 (3) 還原功能：深拷貝資料並直接更新資料庫
         window.restoreHistory = async (index) => {
             if(!confirm("確定要還原到此版本嗎？")) return;
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
-            const target = trip.history[index];
+            const target = targetVersion(trip.history[index]);
             
-            // 修正 (3)：將還原內容寫回 trip 物件並推送到 Firebase
-            trip.data = JSON.parse(JSON.stringify(target.data));
-            trip.members = JSON.parse(JSON.stringify(target.members));
-            trip.customCurrencies = JSON.parse(JSON.stringify(target.customCurrencies));
+            trip.data = target.data;
+            trip.members = target.members;
+            trip.customCurrencies = target.customCurrencies;
             
-            await setDoc(tripsRef, { trips: window.trips });
-            alert("已還原版本！");
+            // 將還原動作本身也記錄下來
+            const actionMsg = `還原至版本: ${target.action} (${target.timestamp})`;
+            await saveHistory(trip, actionMsg);
+            alert("已成功還原！");
         };
+
+        function targetVersion(h) {
+            return {
+                timestamp: h.timestamp,
+                action: h.action,
+                data: JSON.parse(JSON.stringify(h.data || [])),
+                members: JSON.parse(JSON.stringify(h.members || [])),
+                customCurrencies: JSON.parse(JSON.stringify(h.customCurrencies || {}))
+            };
+        }
 
         window.toggleAddExpenseMobile = () => {
             if (window.innerWidth <= 768) {
@@ -289,7 +307,7 @@
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip && newName && trip.name !== newName) {
                 trip.name = newName;
-                await setDoc(tripsRef, { trips: window.trips });
+                await saveToCloud("更名專案");
             }
         };
 
@@ -304,7 +322,7 @@
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             if (trip && trip.members[currentEditingMemberIdx]) {
                 trip.members[currentEditingMemberIdx].photo = AVATARS[avatarIdx];
-                await setDoc(tripsRef, { trips: window.trips });
+                await saveToCloud("更換頭像");
                 closeAvatarPicker();
             }
         };
@@ -347,6 +365,7 @@
             await saveHistory(trip, `將 ${oldName} 改名為 ${newName}`);
         };
 
+        // 修正 (1) (2) 貨幣新增：確保寫入後立即觸發同步
         window.addNewCurrencyManual = async () => {
             const trip = window.trips.find(t => String(t.id) === String(window.currentTripId));
             const codeInput = document.getElementById('newCurrencyCode');
@@ -371,14 +390,14 @@
                 }
             }
 
-            // 修正 (1) & (2)：確保寫回 trip 並推送到 Firebase，觸發 refreshAll
             if(!trip.customCurrencies) trip.customCurrencies = {};
             trip.customCurrencies[code] = rate;
             
-            lastSelectedCurrency = code; // 設定為當前選中，以便新增後立即出現在 (2)
+            lastSelectedCurrency = code; 
             codeInput.value = "";
             rateInput.value = "";
             
+            // 強制寫入雲端
             await saveHistory(trip, `新增幣別: ${code}`);
         };
 
@@ -423,7 +442,7 @@
             let manageHtml = "";
             
             Object.keys(savedCurrencies).forEach(code => {
-                if(code === "0" || code === "[object Object]") return;
+                if(!code || code === "null" || code === "undefined") return;
                 optionsHtml += `<option value="${code}" data-rate="${savedCurrencies[code]}">${code}</option>`;
                 manageHtml += `
                     <div class="currency-manage-item">
@@ -433,7 +452,7 @@
             });
             
             currencySelect.innerHTML = optionsHtml;
-            currencySelect.value = lastSelectedCurrency || "TWD";
+            currencySelect.value = lastSelectedCurrency;
             currencyManageList.innerHTML = manageHtml || `<span class="text-white/20 text-[10px]">尚無自訂外幣</span>`;
             
             const currentRate = parseFloat(currencySelect.options[currencySelect.selectedIndex]?.dataset.rate) || 1;
@@ -706,14 +725,14 @@
                 history: []
             };
             window.trips.push(newTrip);
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveToCloud("建立新專案");
             window.switchTrip(newTrip.id);
         };
 
         window.deleteTripBtn = async () => {
             if(!confirm("確定要刪除整個專案？這動作無法復原！")) return;
             window.trips = window.trips.filter(t => String(t.id) !== String(window.currentTripId));
-            await setDoc(tripsRef, { trips: window.trips });
+            await saveToCloud("刪除專案");
             window.currentTripId = window.trips.length > 0 ? window.trips[0].id : "";
             refreshAll();
         };
